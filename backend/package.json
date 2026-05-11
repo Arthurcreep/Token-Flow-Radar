@@ -1,0 +1,39 @@
+{
+  "name": "token-flow-radar-backend",
+  "version": "1.0.0",
+  "description": "Backend for Token Flow Radar MVP",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "db:create": "npx sequelize-cli db:create",
+    "db:migrate": "npx sequelize-cli db:migrate",
+    "db:seed": "npx sequelize-cli db:seed:all",
+    "db:undo": "npx sequelize-cli db:migrate:undo",
+    "db:reset": "npx sequelize-cli db:migrate:undo:all && npx sequelize-cli db:migrate && npm run mvp:seed",
+    "seed:tokens": "npx sequelize-cli db:seed --seed 001-seed-tokens.js",
+    "seed:labels": "npx sequelize-cli db:seed --seed 002-seed-entities-and-addresses.js",
+    "seed:fake-transfers": "npx sequelize-cli db:seed --seed 003-seed-fake-uni-transfers.js",
+    "seed:fake-holders": "npx sequelize-cli db:seed --seed 004-seed-fake-uni-holder-snapshots.js",
+    "mvp:seed": "npm run seed:tokens && npm run seed:labels && npm run seed:fake-transfers && npm run seed:fake-holders"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "pg": "^8.13.1",
+    "pg-hstore": "^2.3.4",
+    "pino": "^9.5.0",
+    "pino-http": "^10.3.0",
+    "sequelize": "^6.37.5",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9",
+    "pino-pretty": "^13.0.0",
+    "sequelize-cli": "^6.6.2"
+  }
+}
