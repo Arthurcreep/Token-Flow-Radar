@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { getTokenOverview, getTokens } from '../api/tokensApi';
 import Badge from '../components/Badge';
+import DataModeBadge from '../components/DataModeBadge';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
 import { formatPercent, getRegimeStyles, shortAddress } from '../utils/format';
@@ -54,8 +55,8 @@ export default function TokensPage() {
             <p className="metric-label">Ethereum mainnet MVP</p>
             <h1 className="mt-3 page-title">Token radar watchlist</h1>
             <p className="page-subtitle">
-              Карточки показывают текущий regime, score и готовность данных по зрелым токенам.
-              Пока аналитика рассчитана на fake UNI scenario, но структура уже готова под реальные providers.
+              Карточки показывают текущий regime, score и готовность данных. Красная плашка означает,
+              что сигнал построен на demo seed data, а не на реальном рынке.
             </p>
           </div>
 
@@ -85,7 +86,7 @@ export default function TokensPage() {
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <h2 className="text-3xl font-black tracking-tight text-white">{token.symbol}</h2>
                     <Badge className={getRegimeStyles(regime)}>{regime}</Badge>
                   </div>
@@ -96,6 +97,14 @@ export default function TokensPage() {
                   <p className="text-xs text-slate-500">Score</p>
                   <p className="text-2xl font-bold text-white">{overview?.finalScore ?? '—'}</p>
                 </div>
+              </div>
+
+              <div className="mt-5">
+                <DataModeBadge
+                  dataMode={overview?.dataMode || 'not_calculated'}
+                  sourceLabel={overview?.sourceLabel}
+                  sourceWarning={overview?.sourceWarning}
+                />
               </div>
 
               <div className="mt-6 grid grid-cols-2 gap-3">

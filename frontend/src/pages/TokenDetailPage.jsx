@@ -12,6 +12,7 @@ import {
 
 import Badge from '../components/Badge';
 import Card from '../components/Card';
+import DataModeBadge from '../components/DataModeBadge';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
@@ -109,6 +110,12 @@ export default function TokenDetailPage() {
         ← Back to tokens
       </Link>
 
+      <DataModeBadge
+        dataMode={overview.dataMode}
+        sourceLabel={overview.sourceLabel}
+        sourceWarning={overview.sourceWarning}
+      />
+
       <section className="panel overflow-hidden p-6 md:p-8">
         <div className="grid gap-8 xl:grid-cols-[1.35fr_0.65fr] xl:items-center">
           <div>
@@ -126,6 +133,9 @@ export default function TokenDetailPage() {
             <div className="mt-6 flex flex-wrap gap-3 text-xs text-slate-500">
               <span className="rounded-full bg-slate-900 px-3 py-1">
                 Date: {overview.date || '—'}
+              </span>
+              <span className="rounded-full bg-slate-900 px-3 py-1">
+                Data mode: {overview.dataMode || 'unknown'}
               </span>
               <span className="rounded-full bg-slate-900 px-3 py-1">
                 Freshness: {overview.dataFreshness || 'unknown'}

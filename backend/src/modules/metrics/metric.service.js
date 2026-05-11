@@ -165,7 +165,7 @@ function detectRegime({ finalScore, cexSummary, holderSummary, confidence }) {
   return 'NEUTRAL';
 }
 
-function buildExplanation({ regime, cexSummary, holderSummary }) {
+function buildExplanation({ regime }) {
   if (regime === 'ACCUMULATION') {
     return 'CEX netflow is negative while non-CEX top holders are increasing balances. This suggests accumulation pressure.';
   }
@@ -187,6 +187,16 @@ function buildExplanation({ regime, cexSummary, holderSummary }) {
   }
 
   return 'No strong regime detected.';
+}
+
+function buildDataSourceMeta() {
+  return {
+    dataMode: 'fake',
+    source: 'manual_seed_fake_uni',
+    sourceLabel: 'Manual fake UNI seed scenario',
+    sourceWarning: 'This is demo seed data. Do not treat this as a real market signal.',
+    isRealData: false
+  };
 }
 
 async function calculateTokenMetrics({ symbol }) {
@@ -256,6 +266,8 @@ async function calculateTokenMetrics({ symbol }) {
     holderSummary
   });
 
+  const dataSource = buildDataSourceMeta();
+
   const row = {
     token_id: token.id,
     date: toDate,
@@ -276,6 +288,11 @@ async function calculateTokenMetrics({ symbol }) {
     explanation,
     score_version: SCORE_VERSION,
     metrics_json: {
+      dataMode: dataSource.dataMode,
+      source: dataSource.source,
+      sourceLabel: dataSource.sourceLabel,
+      sourceWarning: dataSource.sourceWarning,
+      isRealData: dataSource.isRealData,
       cexSummary,
       holderSummary,
       score: {
@@ -304,6 +321,8 @@ async function calculateTokenMetrics({ symbol }) {
 
 function mapMetric(metric, tokenOverride = null) {
   const token = tokenOverride || metric.token;
+  const metricsJson = metric.metrics_json || {};
+  const dataMode = metricsJson.dataMode || 'fake';
 
   return {
     id: metric.id,
@@ -313,6 +332,12 @@ function mapMetric(metric, tokenOverride = null) {
       name: token.name
     },
     date: metric.date,
+
+    dataMode,
+    source: metricsJson.source || 'unknown',
+    sourceLabel: metricsJson.sourceLabel || 'Unknown data source',
+    sourceWarning: metricsJson.sourceWarning || null,
+    isRealData: metricsJson.isRealData === true,
 
     cexInflow7d: numberValue(metric.cex_inflow_7d),
     cexOutflow7d: numberValue(metric.cex_outflow_7d),
@@ -329,7 +354,7 @@ function mapMetric(metric, tokenOverride = null) {
     regime: metric.regime,
     explanation: metric.explanation,
     scoreVersion: metric.score_version,
-    metrics: metric.metrics_json
+    metrics: metricsJson
   };
 }
 

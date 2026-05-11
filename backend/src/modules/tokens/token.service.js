@@ -2,10 +2,8 @@ const tokenRepository = require('./token.repository');
 const NotFoundError = require('../../errors/NotFoundError');
 const metricService = require('../metrics/metric.service');
 
-async function getTokens() {
-  const tokens = await tokenRepository.findAllActive();
-
-  return tokens.map((token) => ({
+function mapToken(token) {
+  return {
     id: token.id,
     symbol: token.symbol,
     name: token.name,
@@ -13,7 +11,13 @@ async function getTokens() {
     contractAddress: token.contract_address,
     decimals: token.decimals,
     coingeckoId: token.coingecko_id
-  }));
+  };
+}
+
+async function getTokens() {
+  const tokens = await tokenRepository.findAllActive();
+
+  return tokens.map(mapToken);
 }
 
 async function getTokenBySymbol(symbol) {
@@ -25,15 +29,7 @@ async function getTokenBySymbol(symbol) {
     });
   }
 
-  return {
-    id: token.id,
-    symbol: token.symbol,
-    name: token.name,
-    chain: token.chain,
-    contractAddress: token.contract_address,
-    decimals: token.decimals,
-    coingeckoId: token.coingecko_id
-  };
+  return mapToken(token);
 }
 
 async function getTokenOverview(symbol) {
@@ -50,6 +46,11 @@ async function getTokenOverview(symbol) {
       finalScore: null,
       confidence: null,
       dataFreshness: 'metrics_not_calculated',
+      dataMode: 'not_calculated',
+      source: null,
+      sourceLabel: 'No calculated metrics yet',
+      sourceWarning: 'No token metrics have been calculated for this token yet.',
+      isRealData: false,
       message: 'Token registry is ready, but token metrics are not calculated yet.'
     };
   }
@@ -63,6 +64,12 @@ async function getTokenOverview(symbol) {
     explanation: latestMetric.explanation,
     scoreVersion: latestMetric.scoreVersion,
     dataFreshness: 'ready',
+
+    dataMode: latestMetric.dataMode,
+    source: latestMetric.source,
+    sourceLabel: latestMetric.sourceLabel,
+    sourceWarning: latestMetric.sourceWarning,
+    isRealData: latestMetric.isRealData,
 
     cex: {
       inflow7d: latestMetric.cexInflow7d,

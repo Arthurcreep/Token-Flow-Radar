@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { getSignals } from '../api/signalsApi';
 import Badge from '../components/Badge';
 import Card from '../components/Card';
+import DataModeBadge from '../components/DataModeBadge';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
@@ -40,7 +41,7 @@ export default function SignalsPage() {
             <h1 className="mt-3 page-title">Detected regime events</h1>
             <p className="page-subtitle">
               Журнал фиксирует события, которые система уже распознала на основе token metrics.
-              Это память радара, а не просто текущий snapshot.
+              Data mode обязателен: fake-сигналы нельзя путать с реальным рынком.
             </p>
           </div>
 
@@ -62,6 +63,14 @@ export default function SignalsPage() {
           <div className="space-y-4">
             {signals.map((signal) => (
               <article key={signal.id} className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition hover:border-slate-700">
+                <div className="mb-4">
+                  <DataModeBadge
+                    dataMode={signal.dataMode}
+                    sourceLabel={signal.sourceLabel}
+                    sourceWarning={signal.sourceWarning}
+                  />
+                </div>
+
                 <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">

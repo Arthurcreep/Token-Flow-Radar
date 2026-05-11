@@ -51,6 +51,8 @@ function getSummary({ symbol, regime }) {
 }
 
 function mapSignal(signal) {
+  const metrics = signal.metrics_json || {};
+
   return {
     id: signal.id,
     token: {
@@ -67,7 +69,14 @@ function mapSignal(signal) {
     regime: signal.regime,
     summary: signal.summary,
     explanation: signal.explanation,
-    metrics: signal.metrics_json,
+
+    dataMode: metrics.dataMode || 'fake',
+    source: metrics.source || 'unknown',
+    sourceLabel: metrics.sourceLabel || 'Unknown data source',
+    sourceWarning: metrics.sourceWarning || null,
+    isRealData: metrics.isRealData === true,
+
+    metrics,
     sourceMetricId: signal.source_metric_id
   };
 }
@@ -115,7 +124,7 @@ async function generateSignalsForToken({ symbol }) {
       metricId: metric.id,
       scoreVersion: metric.score_version,
       metricDate: metric.date,
-      ...metric.metrics_json
+      ...(metric.metrics_json || {})
     },
     source_metric_id: metric.id,
     created_at: new Date(),
