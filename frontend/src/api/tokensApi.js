@@ -24,3 +24,30 @@ export async function getTokenSignals(symbol) {
   const response = await apiClient.get(`/tokens/${symbol}/signals`);
   return response.data.data;
 }
+
+export async function calculateCexFlows(symbol) {
+  const response = await apiClient.post(`/jobs/calculate-cex-flows/${symbol}`);
+  return response.data.data;
+}
+
+export async function calculateTokenMetrics(symbol) {
+  const response = await apiClient.post(`/jobs/calculate-token-metrics/${symbol}`);
+  return response.data.data;
+}
+
+export async function generateTokenSignals(symbol) {
+  const response = await apiClient.post(`/jobs/generate-signals/${symbol}`);
+  return response.data.data;
+}
+
+export async function refreshTokenPipeline(symbol) {
+  const cexFlows = await calculateCexFlows(symbol);
+  const metrics = await calculateTokenMetrics(symbol);
+  const signal = await generateTokenSignals(symbol);
+
+  return {
+    cexFlows,
+    metrics,
+    signal
+  };
+}

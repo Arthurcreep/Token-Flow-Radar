@@ -17,6 +17,10 @@ const Signal = sequelize.define(
       type: DataTypes.DATE,
       allowNull: false
     },
+    signal_date: {
+      type: DataTypes.DATEONLY,
+      allowNull: true
+    },
     signal_type: {
       type: DataTypes.STRING(64),
       allowNull: false

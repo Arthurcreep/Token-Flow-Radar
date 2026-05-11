@@ -6,7 +6,7 @@ function numberValue(value) {
   return Number(value);
 }
 
-function getSeverity({ regime, score, confidence }) {
+function getSeverity({ score, confidence }) {
   const absScore = Math.abs(score);
 
   if (confidence >= 0.75 && absScore >= 80) {
@@ -59,6 +59,7 @@ function mapSignal(signal) {
       name: signal.token.name
     },
     timestamp: signal.timestamp,
+    signalDate: signal.signal_date,
     signalType: signal.signal_type,
     severity: signal.severity,
     confidence: numberValue(signal.confidence),
@@ -86,13 +87,20 @@ async function generateSignalsForToken({ symbol }) {
   const tokenSymbol = metric.token.symbol;
 
   const signalType = getSignalType(regime);
-  const severity = getSeverity({ regime, score, confidence });
+  const severity = getSeverity({ score, confidence });
+  const signalDate = metric.date;
 
-  await signalRepository.deleteSignalsForMetric(metric.id);
+  await signalRepository.deleteDuplicateSignals({
+    tokenId: metric.token_id,
+    signalType,
+    regime,
+    signalDate
+  });
 
   const signal = await signalRepository.createSignal({
     token_id: metric.token_id,
     timestamp: new Date(),
+    signal_date: signalDate,
     signal_type: signalType,
     severity,
     confidence: String(confidence),

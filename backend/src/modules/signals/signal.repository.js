@@ -16,10 +16,13 @@ async function findLatestMetricBySymbol(symbol) {
   });
 }
 
-async function deleteSignalsForMetric(metricId) {
+async function deleteDuplicateSignals({ tokenId, signalType, regime, signalDate }) {
   return Signal.destroy({
     where: {
-      source_metric_id: metricId
+      token_id: tokenId,
+      signal_type: signalType,
+      regime,
+      signal_date: signalDate
     }
   });
 }
@@ -67,7 +70,7 @@ async function findSignals({ limit = 50, offset = 0 }) {
 
 module.exports = {
   findLatestMetricBySymbol,
-  deleteSignalsForMetric,
+  deleteDuplicateSignals,
   createSignal,
   findSignalsByTokenSymbol,
   findSignals
