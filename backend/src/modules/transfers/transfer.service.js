@@ -1,7 +1,23 @@
 const transferRepository = require('./transfer.repository');
+const NotFoundError = require('../../errors/NotFoundError');
 
-function mapAddress(addressModel, rawAddress) {
-  if (!addressModel) {
+function numberValue(value) {
+  if (value === null || value === undefined) return null;
+  return Number(value);
+}
+
+function mapEntity(entity) {
+  if (!entity) return null;
+
+  return {
+    id: entity.id,
+    name: entity.name,
+    entityType: entity.entity_type
+  };
+}
+
+function mapAddress(address, rawAddress) {
+  if (!address) {
     return {
       address: rawAddress,
       label: null,
@@ -12,19 +28,20 @@ function mapAddress(addressModel, rawAddress) {
   }
 
   return {
-    id: addressModel.id,
-    address: addressModel.address,
-    label: addressModel.label,
-    addressType: addressModel.address_type,
-    addressRole: addressModel.address_role,
-    entity: addressModel.entity
-      ? {
-          id: addressModel.entity.id,
-          name: addressModel.entity.name,
-          entityType: addressModel.entity.entity_type
-        }
-      : null
+    id: address.id,
+    address: address.address,
+    label: address.label,
+    addressType: address.address_type,
+    addressRole: address.address_role,
+    entity: mapEntity(address.entity)
   };
+}
+
+function getDataModeFromSource(source) {
+  if (!source) return 'unknown';
+  if (source.startsWith('manual_seed_fake')) return 'fake';
+  if (source.startsWith('etherscan')) return 'real';
+  return 'unknown';
 }
 
 function mapTransfer(transfer) {
@@ -41,16 +58,31 @@ function mapTransfer(transfer) {
     logIndex: transfer.log_index,
     from: mapAddress(transfer.fromAddress, transfer.from_address_raw),
     to: mapAddress(transfer.toAddress, transfer.to_address_raw),
-    amountDecimal: Number(transfer.amount_decimal),
-    amountUsd: transfer.amount_usd === null ? null : Number(transfer.amount_usd),
+    amountDecimal: numberValue(transfer.amount_decimal),
+    amountUsd: numberValue(transfer.amount_usd),
     timestamp: transfer.timestamp,
-    source: transfer.source
+    source: transfer.source,
+    dataMode: getDataModeFromSource(transfer.source)
   };
 }
 
-async function getTransfers({ tokenSymbol, limit, offset }) {
-  const result = await transferRepository.findTransfers({
-    tokenSymbol,
+async function getTransfers({
+  token,
+  source,
+  limit,
+  offset
+}) {
+  const tokenRow = await transferRepository.findTokenBySymbol(token);
+
+  if (!tokenRow) {
+    throw new NotFoundError(`Token ${token} not found`, 'TOKEN_NOT_FOUND', {
+      token
+    });
+  }
+
+  const result = await transferRepository.findTransfersByToken({
+    tokenId: tokenRow.id,
+    source,
     limit,
     offset
   });
@@ -60,11 +92,34 @@ async function getTransfers({ tokenSymbol, limit, offset }) {
     meta: {
       limit,
       offset,
-      total: result.count
+      total: result.count,
+      source: source || 'all',
+      dataMode: source ? getDataModeFromSource(source) : 'mixed_or_all'
     }
   };
 }
 
+async function getTransferSources({ token }) {
+  const tokenRow = await transferRepository.findTokenBySymbol(token);
+
+  if (!tokenRow) {
+    throw new NotFoundError(`Token ${token} not found`, 'TOKEN_NOT_FOUND', {
+      token
+    });
+  }
+
+  const sources = await transferRepository.findTransferSourcesByToken({
+    tokenId: tokenRow.id
+  });
+
+  return sources.map((row) => ({
+    source: row.source,
+    dataMode: getDataModeFromSource(row.source)
+  }));
+}
+
 module.exports = {
-  getTransfers
+  getTransfers,
+  getTransferSources,
+  getDataModeFromSource
 };

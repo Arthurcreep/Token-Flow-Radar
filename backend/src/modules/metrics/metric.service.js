@@ -23,6 +23,44 @@ function isCexHolder(holder) {
   return holder.address?.entity?.entity_type === 'cex' || holder.address?.address_type === 'cex';
 }
 
+function getDataModeFromSource(source) {
+  if (!source) return 'unknown';
+  if (source.includes('manual_seed_fake')) return 'fake';
+  if (source.includes('etherscan')) return 'real';
+  if (source.includes('mixed')) return 'mixed';
+  return 'unknown';
+}
+
+function combineDataModes(left, right) {
+  if (left === right) return left;
+  if (left === 'unknown') return right;
+  if (right === 'unknown') return left;
+  return 'mixed';
+}
+
+function getSourceLabel({ dataMode, cexFlowSource, holderSource }) {
+  if (dataMode === 'fake') return 'Manual fake UNI seed scenario';
+  if (dataMode === 'real') return 'Real data sources';
+  if (dataMode === 'mixed') return 'Mixed real/fake data';
+  return 'Unknown data sources';
+}
+
+function getSourceWarning({ dataMode, cexFlowSource, holderSource }) {
+  if (dataMode === 'fake') {
+    return 'This is demo seed data. Do not treat this as a real market signal.';
+  }
+
+  if (dataMode === 'mixed') {
+    return `Mixed data warning: CEX flows source=${cexFlowSource || 'default'}, holders source=${holderSource || 'default'}. Do not treat this as a real accumulation/distribution signal.`;
+  }
+
+  if (dataMode === 'real') {
+    return null;
+  }
+
+  return 'Data source mode is unknown.';
+}
+
 function buildCexSummary(flows) {
   return flows.reduce(
     (acc, flow) => {
@@ -77,13 +115,8 @@ function clamp(value, min, max) {
 function calculateCexFlowScore(cexSummary) {
   const netflow = cexSummary.cexNetflow7d;
 
-  if (netflow < 0) {
-    return 40;
-  }
-
-  if (netflow > 0) {
-    return -40;
-  }
+  if (netflow < 0) return 40;
+  if (netflow > 0) return -40;
 
   return 0;
 }
@@ -91,34 +124,21 @@ function calculateCexFlowScore(cexSummary) {
 function calculateHolderScore(holderSummary) {
   let score = 0;
 
-  if (holderSummary.nonCexBalanceChange7d > 0) {
-    score += 35;
-  }
-
-  if (holderSummary.nonCexBalanceChange7d < 0) {
-    score -= 35;
-  }
-
-  if (holderSummary.cexBalanceChange7d < 0) {
-    score += 15;
-  }
-
-  if (holderSummary.cexBalanceChange7d > 0) {
-    score -= 15;
-  }
-
-  if (holderSummary.nonCexAccumulatingCount > holderSummary.nonCexDistributingCount) {
-    score += 10;
-  }
-
-  if (holderSummary.nonCexDistributingCount > holderSummary.nonCexAccumulatingCount) {
-    score -= 10;
-  }
+  if (holderSummary.nonCexBalanceChange7d > 0) score += 35;
+  if (holderSummary.nonCexBalanceChange7d < 0) score -= 35;
+  if (holderSummary.cexBalanceChange7d < 0) score += 15;
+  if (holderSummary.cexBalanceChange7d > 0) score -= 15;
+  if (holderSummary.nonCexAccumulatingCount > holderSummary.nonCexDistributingCount) score += 10;
+  if (holderSummary.nonCexDistributingCount > holderSummary.nonCexAccumulatingCount) score -= 10;
 
   return clamp(score, -60, 60);
 }
 
-function calculateConfidence({ flows, holders }) {
+function calculateConfidence({ flows, holders, dataMode }) {
+  if (dataMode === 'mixed') {
+    return 0.35;
+  }
+
   let confidence = 0.3;
 
   if (flows.length > 0) confidence += 0.2;
@@ -133,7 +153,11 @@ function calculateConfidence({ flows, holders }) {
   return Number(clamp(confidence, 0, 0.95).toFixed(4));
 }
 
-function detectRegime({ finalScore, cexSummary, holderSummary, confidence }) {
+function detectRegime({ finalScore, cexSummary, holderSummary, confidence, dataMode }) {
+  if (dataMode === 'mixed') {
+    return 'MIXED_DATA_REVIEW_REQUIRED';
+  }
+
   if (confidence < 0.45) {
     return 'UNCLEAR_LOW_CONFIDENCE';
   }
@@ -154,18 +178,17 @@ function detectRegime({ finalScore, cexSummary, holderSummary, confidence }) {
     return 'DISTRIBUTION';
   }
 
-  if (cexSummary.cexNetflow7d < 0) {
-    return 'CEX_SUPPLY_DRAIN';
-  }
-
-  if (cexSummary.cexNetflow7d > 0) {
-    return 'CEX_SELL_PRESSURE';
-  }
+  if (cexSummary.cexNetflow7d < 0) return 'CEX_SUPPLY_DRAIN';
+  if (cexSummary.cexNetflow7d > 0) return 'CEX_SELL_PRESSURE';
 
   return 'NEUTRAL';
 }
 
-function buildExplanation({ regime }) {
+function buildExplanation({ regime, dataMode, cexFlowSource, holderSource }) {
+  if (regime === 'MIXED_DATA_REVIEW_REQUIRED') {
+    return `CEX flows and holder snapshots come from different data modes. CEX flow source=${cexFlowSource || 'default'}, holder source=${holderSource || 'default'}. This is useful for engineering validation, but it is not a real market signal.`;
+  }
+
   if (regime === 'ACCUMULATION') {
     return 'CEX netflow is negative while non-CEX top holders are increasing balances. This suggests accumulation pressure.';
   }
@@ -189,61 +212,82 @@ function buildExplanation({ regime }) {
   return 'No strong regime detected.';
 }
 
-function buildDataSourceMeta() {
+function getDefaultSources({ cexFlowSource, holderSource }) {
   return {
-    dataMode: 'fake',
-    source: 'manual_seed_fake_uni',
-    sourceLabel: 'Manual fake UNI seed scenario',
-    sourceWarning: 'This is demo seed data. Do not treat this as a real market signal.',
-    isRealData: false
+    effectiveCexFlowSource: cexFlowSource || 'calculated_from_manual_seed_fake_uni',
+    effectiveHolderSource: holderSource || 'manual_seed_fake_uni_holders'
   };
 }
 
-async function calculateTokenMetrics({ symbol }) {
+async function calculateTokenMetrics({ symbol, cexFlowSource, holderSource }) {
   const token = await metricRepository.findTokenBySymbol(symbol);
 
   if (!token) {
     throw new NotFoundError(`Token ${symbol} not found`, 'TOKEN_NOT_FOUND', { symbol });
   }
 
+  const { effectiveCexFlowSource, effectiveHolderSource } = getDefaultSources({
+    cexFlowSource,
+    holderSource
+  });
+
+  const cexFlowDataMode = getDataModeFromSource(effectiveCexFlowSource);
+  const holderDataMode = getDataModeFromSource(effectiveHolderSource);
+  const dataMode = combineDataModes(cexFlowDataMode, holderDataMode);
+
   const latestHolderDate = await metricRepository.findLatestHolderDate({
-    tokenId: token.id
+    tokenId: token.id,
+    source: effectiveHolderSource
   });
 
   if (!latestHolderDate) {
     throw new BadRequestError('No holder snapshots found', 'NO_HOLDER_SNAPSHOTS_FOUND', {
-      symbol
-    });
-  }
-
-  const toDate = latestHolderDate;
-  const fromDate = daysAgo(toDate, 7);
-
-  const flows = await metricRepository.findCexFlowsByDateRange({
-    tokenId: token.id,
-    fromDate,
-    toDate
-  });
-
-  if (!flows.length) {
-    throw new BadRequestError('No CEX flows found. Calculate CEX flows first.', 'NO_CEX_FLOWS_FOUND', {
       symbol,
-      fromDate,
-      toDate
+      holderSource: effectiveHolderSource
     });
   }
 
   const holders = await metricRepository.findHolderSnapshotsByDate({
     tokenId: token.id,
-    date: latestHolderDate
+    date: latestHolderDate,
+    source: effectiveHolderSource
   });
 
   if (!holders.length) {
     throw new BadRequestError('No holder snapshots found for latest date', 'NO_HOLDER_SNAPSHOTS_FOUND', {
       symbol,
-      date: latestHolderDate
+      date: latestHolderDate,
+      holderSource: effectiveHolderSource
     });
   }
+
+  let flows = [];
+
+  if (cexFlowSource) {
+    flows = await metricRepository.findCexFlowsBySource({
+      tokenId: token.id,
+      source: effectiveCexFlowSource
+    });
+  } else {
+    const toDate = latestHolderDate;
+    const fromDate = daysAgo(toDate, 7);
+
+    flows = await metricRepository.findCexFlowsByDateRange({
+      tokenId: token.id,
+      fromDate,
+      toDate,
+      source: effectiveCexFlowSource
+    });
+  }
+
+  if (!flows.length) {
+    throw new BadRequestError('No CEX flows found. Calculate CEX flows first.', 'NO_CEX_FLOWS_FOUND', {
+      symbol,
+      cexFlowSource: effectiveCexFlowSource
+    });
+  }
+
+  const metricDate = latestHolderDate;
 
   const cexSummary = buildCexSummary(flows);
   const holderSummary = buildHolderSummary(holders);
@@ -251,26 +295,43 @@ async function calculateTokenMetrics({ symbol }) {
   const cexFlowScore = calculateCexFlowScore(cexSummary);
   const holderScore = calculateHolderScore(holderSummary);
   const finalScore = clamp(cexFlowScore + holderScore, -100, 100);
-  const confidence = calculateConfidence({ flows, holders });
+
+  const confidence = calculateConfidence({
+    flows,
+    holders,
+    dataMode
+  });
 
   const regime = detectRegime({
     finalScore,
     cexSummary,
     holderSummary,
-    confidence
+    confidence,
+    dataMode
   });
 
   const explanation = buildExplanation({
     regime,
-    cexSummary,
-    holderSummary
+    dataMode,
+    cexFlowSource: effectiveCexFlowSource,
+    holderSource: effectiveHolderSource
   });
 
-  const dataSource = buildDataSourceMeta();
+  const sourceLabel = getSourceLabel({
+    dataMode,
+    cexFlowSource: effectiveCexFlowSource,
+    holderSource: effectiveHolderSource
+  });
+
+  const sourceWarning = getSourceWarning({
+    dataMode,
+    cexFlowSource: effectiveCexFlowSource,
+    holderSource: effectiveHolderSource
+  });
 
   const row = {
     token_id: token.id,
-    date: toDate,
+    date: metricDate,
 
     cex_inflow_7d: String(cexSummary.cexInflow7d),
     cex_outflow_7d: String(cexSummary.cexOutflow7d),
@@ -288,11 +349,15 @@ async function calculateTokenMetrics({ symbol }) {
     explanation,
     score_version: SCORE_VERSION,
     metrics_json: {
-      dataMode: dataSource.dataMode,
-      source: dataSource.source,
-      sourceLabel: dataSource.sourceLabel,
-      sourceWarning: dataSource.sourceWarning,
-      isRealData: dataSource.isRealData,
+      dataMode,
+      cexFlowDataMode,
+      holderDataMode,
+      source: dataMode === 'mixed' ? 'mixed_sources' : effectiveCexFlowSource,
+      cexFlowSource: effectiveCexFlowSource,
+      holderSource: effectiveHolderSource,
+      sourceLabel,
+      sourceWarning,
+      isRealData: dataMode === 'real',
       cexSummary,
       holderSummary,
       score: {
@@ -310,7 +375,7 @@ async function calculateTokenMetrics({ symbol }) {
 
   await metricRepository.deleteMetricForDate({
     tokenId: token.id,
-    date: toDate,
+    date: metricDate,
     scoreVersion: SCORE_VERSION
   });
 
@@ -334,7 +399,11 @@ function mapMetric(metric, tokenOverride = null) {
     date: metric.date,
 
     dataMode,
+    cexFlowDataMode: metricsJson.cexFlowDataMode || null,
+    holderDataMode: metricsJson.holderDataMode || null,
     source: metricsJson.source || 'unknown',
+    cexFlowSource: metricsJson.cexFlowSource || null,
+    holderSource: metricsJson.holderSource || null,
     sourceLabel: metricsJson.sourceLabel || 'Unknown data source',
     sourceWarning: metricsJson.sourceWarning || null,
     isRealData: metricsJson.isRealData === true,

@@ -1,10 +1,11 @@
 const transferService = require('./transfer.service');
 
 async function getTransfers(req, res) {
-  const { token, limit, offset } = req.validated.query;
+  const { token, source, limit, offset } = req.validated.query;
 
   const result = await transferService.getTransfers({
-    tokenSymbol: token,
+    token,
+    source,
     limit,
     offset
   });
@@ -16,6 +17,21 @@ async function getTransfers(req, res) {
   });
 }
 
+async function getTransferSources(req, res) {
+  const { token } = req.validated.query;
+
+  const data = await transferService.getTransferSources({
+    token
+  });
+
+  res.json({
+    success: true,
+    data,
+    meta: {}
+  });
+}
+
 module.exports = {
-  getTransfers
+  getTransfers,
+  getTransferSources
 };

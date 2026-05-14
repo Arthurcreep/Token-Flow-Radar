@@ -1,4 +1,3 @@
-const { Op } = require('sequelize');
 const {
   Token,
   CexFlowDaily,
@@ -17,46 +16,100 @@ async function findTokenBySymbol(symbol) {
   });
 }
 
-async function findCexFlowsByDateRange({ tokenId, fromDate, toDate }) {
+async function findLatestHolderDate({ tokenId, source }) {
+  const where = {
+    token_id: tokenId
+  };
+
+  if (source) {
+    where.source = source;
+  }
+
+  return HolderSnapshot.max('date', {
+    where
+  });
+}
+
+async function findCexFlowsBySource({ tokenId, source }) {
+  const where = {
+    token_id: tokenId
+  };
+
+  if (source) {
+    where.source = source;
+  }
+
   return CexFlowDaily.findAll({
-    where: {
-      token_id: tokenId,
-      date: {
-        [Op.gte]: fromDate,
-        [Op.lte]: toDate
-      }
-    },
+    where,
     order: [['date', 'ASC']]
   });
 }
 
-async function findLatestHolderDate({ tokenId }) {
-  return HolderSnapshot.max('date', {
-    where: {
-      token_id: tokenId
+async function findCexFlowsByDateRange({
+  tokenId,
+  fromDate,
+  toDate,
+  source
+}) {
+  const { Op } = require('sequelize');
+
+  const where = {
+    token_id: tokenId,
+    date: {
+      [Op.gte]: fromDate,
+      [Op.lte]: toDate
     }
+  };
+
+  if (source) {
+    where.source = source;
+  }
+
+  return CexFlowDaily.findAll({
+    where,
+    order: [['date', 'ASC']]
   });
 }
 
-async function findHolderSnapshotsByDate({ tokenId, date }) {
+async function findHolderSnapshotsByDate({
+  tokenId,
+  date,
+  source
+}) {
+  const where = {
+    token_id: tokenId,
+    date
+  };
+
+  if (source) {
+    where.source = source;
+  }
+
   return HolderSnapshot.findAll({
-    where: {
-      token_id: tokenId,
-      date
-    },
+    where,
     include: [
       {
         model: Address,
         as: 'address',
         required: false,
-        include: [{ model: Entity, as: 'entity', required: false }]
+        include: [
+          {
+            model: Entity,
+            as: 'entity',
+            required: false
+          }
+        ]
       }
     ],
     order: [['rank', 'ASC']]
   });
 }
 
-async function deleteMetricForDate({ tokenId, date, scoreVersion }) {
+async function deleteMetricForDate({
+  tokenId,
+  date,
+  scoreVersion
+}) {
   return TokenMetricDaily.destroy({
     where: {
       token_id: tokenId,
@@ -82,14 +135,15 @@ async function findLatestMetricBySymbol(symbol) {
         }
       }
     ],
-    order: [['date', 'DESC']]
+    order: [['date', 'DESC'], ['id', 'DESC']]
   });
 }
 
 module.exports = {
   findTokenBySymbol,
-  findCexFlowsByDateRange,
   findLatestHolderDate,
+  findCexFlowsBySource,
+  findCexFlowsByDateRange,
   findHolderSnapshotsByDate,
   deleteMetricForDate,
   createMetric,

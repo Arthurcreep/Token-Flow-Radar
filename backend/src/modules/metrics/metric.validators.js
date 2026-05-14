@@ -10,7 +10,7 @@ const symbolParam = z
     message: 'Unsupported token symbol'
   });
 
-const latestMetricSchema = z.object({
+const getLatestMetricSchema = z.object({
   params: z.object({
     symbol: symbolParam
   }),
@@ -19,6 +19,5 @@ const latestMetricSchema = z.object({
 });
 
 module.exports = {
-  latestMetricSchema,
-  symbolParam
+  getLatestMetricSchema
 };

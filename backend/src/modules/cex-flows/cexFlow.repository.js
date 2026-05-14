@@ -1,5 +1,10 @@
-const { Op } = require('sequelize');
-const { Token, TokenTransfer, Address, Entity, CexFlowDaily } = require('../../models');
+const {
+  Token,
+  TokenTransfer,
+  Address,
+  Entity,
+  CexFlowDaily
+} = require('../../models');
 
 async function findTokenBySymbol(symbol) {
   return Token.findOne({
@@ -10,16 +15,47 @@ async function findTokenBySymbol(symbol) {
   });
 }
 
-async function findTransfersForCalculation({ tokenId, fromDate, toDate }) {
+function buildTransferWhere({
+  tokenId,
+  source,
+  fromDate,
+  toDate
+}) {
   const where = {
     token_id: tokenId
   };
 
+  if (source) {
+    where.source = source;
+  }
+
   if (fromDate || toDate) {
     where.timestamp = {};
-    if (fromDate) where.timestamp[Op.gte] = fromDate;
-    if (toDate) where.timestamp[Op.lte] = toDate;
+
+    if (fromDate) {
+      where.timestamp[require('sequelize').Op.gte] = new Date(`${fromDate}T00:00:00.000Z`);
+    }
+
+    if (toDate) {
+      where.timestamp[require('sequelize').Op.lte] = new Date(`${toDate}T23:59:59.999Z`);
+    }
   }
+
+  return where;
+}
+
+async function findTransfersForCexFlow({
+  tokenId,
+  source,
+  fromDate,
+  toDate
+}) {
+  const where = buildTransferWhere({
+    tokenId,
+    source,
+    fromDate,
+    toDate
+  });
 
   return TokenTransfer.findAll({
     where,
@@ -28,56 +64,68 @@ async function findTransfersForCalculation({ tokenId, fromDate, toDate }) {
         model: Address,
         as: 'fromAddress',
         required: false,
-        include: [{ model: Entity, as: 'entity', required: false }]
+        include: [
+          {
+            model: Entity,
+            as: 'entity',
+            required: false
+          }
+        ]
       },
       {
         model: Address,
         as: 'toAddress',
         required: false,
-        include: [{ model: Entity, as: 'entity', required: false }]
+        include: [
+          {
+            model: Entity,
+            as: 'entity',
+            required: false
+          }
+        ]
       }
     ],
     order: [['timestamp', 'ASC']]
   });
 }
 
-async function deleteFlowsForToken({ tokenId, fromDate, toDate }) {
+async function deleteCexFlows({
+  tokenId,
+  source
+}) {
   const where = {
     token_id: tokenId
   };
 
-  if (fromDate || toDate) {
-    where.date = {};
-    if (fromDate) where.date[Op.gte] = fromDate.slice(0, 10);
-    if (toDate) where.date[Op.lte] = toDate.slice(0, 10);
+  if (source) {
+    where.source = source;
   }
 
-  return CexFlowDaily.destroy({ where });
-}
-
-async function bulkInsertFlows(rows) {
-  if (!rows.length) return [];
-
-  return CexFlowDaily.bulkCreate(rows, {
-    updateOnDuplicate: [
-      'cex_inflow',
-      'cex_outflow',
-      'cex_netflow',
-      'cex_inflow_usd',
-      'cex_outflow_usd',
-      'cex_netflow_usd',
-      'inflow_tx_count',
-      'outflow_tx_count',
-      'large_inflow_count',
-      'large_outflow_count',
-      'source',
-      'updated_at'
-    ]
+  return CexFlowDaily.destroy({
+    where
   });
 }
 
-async function findFlowsByTokenSymbol({ symbol, limit = 30, offset = 0 }) {
+async function bulkCreateCexFlows(rows) {
+  if (!rows.length) return [];
+
+  return CexFlowDaily.bulkCreate(rows);
+}
+
+async function findCexFlowsByToken({
+  symbol,
+  source,
+  limit = 30,
+  offset = 0
+}) {
+  const where = {};
+
+  if (source) {
+    where.source = source;
+  }
+
   const { rows, count } = await CexFlowDaily.findAndCountAll({
+    where,
     include: [
       {
         model: Token,
@@ -88,18 +136,21 @@ async function findFlowsByTokenSymbol({ symbol, limit = 30, offset = 0 }) {
         }
       }
     ],
+    order: [['date', 'DESC']],
     limit,
-    offset,
-    order: [['date', 'DESC']]
+    offset
   });
 
-  return { rows, count };
+  return {
+    rows,
+    count
+  };
 }
 
 module.exports = {
   findTokenBySymbol,
-  findTransfersForCalculation,
-  deleteFlowsForToken,
-  bulkInsertFlows,
-  findFlowsByTokenSymbol
+  findTransfersForCexFlow,
+  deleteCexFlows,
+  bulkCreateCexFlows,
+  findCexFlowsByToken
 };

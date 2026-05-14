@@ -6,10 +6,17 @@ const validateRequest = require('../../middlewares/validateRequest');
 const {
   calculateCexFlowsSchema,
   calculateTokenMetricsSchema,
-  generateSignalsSchema
+  generateSignalsSchema,
+  ingestTransfersSchema
 } = require('./job.validators');
 
 const router = express.Router();
+
+router.post(
+  '/ingest-transfers/:symbol',
+  validateRequest(ingestTransfersSchema),
+  asyncHandler(jobController.ingestTransfers)
+);
 
 router.post(
   '/calculate-cex-flows/:symbol',
@@ -28,4 +35,5 @@ router.post(
   validateRequest(generateSignalsSchema),
   asyncHandler(jobController.generateSignals)
 );
+
 module.exports = router;
