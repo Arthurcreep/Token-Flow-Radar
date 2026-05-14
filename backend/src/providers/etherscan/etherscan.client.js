@@ -23,7 +23,7 @@ function getRequiredEnv(name) {
   return value;
 }
 
-function buildUrl(params) {
+function buildBaseUrl({ module, action, params = {} }) {
   const apiUrl = process.env.ETHERSCAN_API_URL || DEFAULT_ETHERSCAN_API_URL;
   const apiKey = getRequiredEnv('ETHERSCAN_API_KEY');
   const chainId = process.env.ETHERSCAN_CHAIN_ID || DEFAULT_CHAIN_ID;
@@ -31,8 +31,8 @@ function buildUrl(params) {
   const url = new URL(apiUrl);
 
   url.searchParams.set('chainid', chainId);
-  url.searchParams.set('module', 'account');
-  url.searchParams.set('action', 'tokentx');
+  url.searchParams.set('module', module);
+  url.searchParams.set('action', action);
   url.searchParams.set('apikey', apiKey);
 
   Object.entries(params).forEach(([key, value]) => {
@@ -95,6 +95,39 @@ async function requestJsonWithRetry(url) {
   return lastPayload;
 }
 
+async function fetchLatestBlockNumber() {
+  const url = buildBaseUrl({
+    module: 'proxy',
+    action: 'eth_blockNumber'
+  });
+
+  const payload = await requestJsonWithRetry(url);
+
+  if (!payload.result) {
+    throw new ExternalApiError(
+      'Invalid latest block response',
+      'ETHERSCAN_INVALID_LATEST_BLOCK_RESPONSE',
+      {
+        payload
+      }
+    );
+  }
+
+  const latestBlock = Number.parseInt(payload.result, 16);
+
+  if (!Number.isInteger(latestBlock) || latestBlock <= 0) {
+    throw new ExternalApiError(
+      'Could not parse latest Ethereum block',
+      'ETHERSCAN_LATEST_BLOCK_PARSE_ERROR',
+      {
+        result: payload.result
+      }
+    );
+  }
+
+  return latestBlock;
+}
+
 async function fetchErc20TransfersByAddress({
   address,
   contractAddress,
@@ -104,14 +137,18 @@ async function fetchErc20TransfersByAddress({
   offset = 100,
   sort = 'asc'
 }) {
-  const url = buildUrl({
-    address,
-    contractaddress: contractAddress,
-    startblock: startBlock,
-    endblock: endBlock,
-    page,
-    offset,
-    sort
+  const url = buildBaseUrl({
+    module: 'account',
+    action: 'tokentx',
+    params: {
+      address,
+      contractaddress: contractAddress,
+      startblock: startBlock,
+      endblock: endBlock,
+      page,
+      offset,
+      sort
+    }
   });
 
   const payload = await requestJsonWithRetry(url);
@@ -146,6 +183,7 @@ async function fetchErc20TransfersByAddress({
 }
 
 module.exports = {
+  fetchLatestBlockNumber,
   fetchErc20TransfersByAddress,
   sleep
 };

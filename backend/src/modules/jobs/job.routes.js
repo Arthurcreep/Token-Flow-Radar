@@ -7,7 +7,8 @@ const {
   calculateCexFlowsSchema,
   calculateTokenMetricsSchema,
   generateSignalsSchema,
-  ingestTransfersSchema
+  ingestTransfersSchema,
+  ingestRecentTransfersSchema
 } = require('./job.validators');
 
 const router = express.Router();
@@ -16,6 +17,12 @@ router.post(
   '/ingest-transfers/:symbol',
   validateRequest(ingestTransfersSchema),
   asyncHandler(jobController.ingestTransfers)
+);
+
+router.post(
+  '/ingest-recent-transfers/:symbol',
+  validateRequest(ingestRecentTransfersSchema),
+  asyncHandler(jobController.ingestRecentTransfers)
 );
 
 router.post(

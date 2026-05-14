@@ -44,18 +44,17 @@ async function findAddressByRaw({ chain = 'ethereum', address }) {
   });
 }
 
-async function findExistingTransfers({ tokenId, transferKeys = [] }) {
-  if (!transferKeys.length) return [];
+async function findExistingTransfersByHashes({ tokenId, source, txHashes = [] }) {
+  const uniqueHashes = [...new Set(txHashes.filter(Boolean))];
 
-  const hashes = [...new Set(transferKeys.map((item) => item.txHash).filter(Boolean))];
-
-  if (!hashes.length) return [];
+  if (!uniqueHashes.length) return [];
 
   return TokenTransfer.findAll({
     where: {
       token_id: tokenId,
+      source,
       tx_hash: {
-        [Op.in]: hashes
+        [Op.in]: uniqueHashes
       }
     }
   });
@@ -63,7 +62,6 @@ async function findExistingTransfers({ tokenId, transferKeys = [] }) {
 
 async function bulkCreateTransfers(rows = []) {
   if (!rows.length) return [];
-
   return TokenTransfer.bulkCreate(rows);
 }
 
@@ -71,6 +69,6 @@ module.exports = {
   findTokenBySymbol,
   findCexAddresses,
   findAddressByRaw,
-  findExistingTransfers,
+  findExistingTransfersByHashes,
   bulkCreateTransfers
 };

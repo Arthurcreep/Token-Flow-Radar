@@ -54,14 +54,34 @@ async function generateSignals(req, res) {
 
 async function ingestTransfers(req, res) {
   const { symbol } = req.validated.params;
-  const { startBlock, endBlock, offset, maxPages } = req.validated.query;
+  const { startBlock, endBlock, offset, maxPages, maxAddresses } = req.validated.query;
 
   const data = await transferIngestionService.ingestTransfersForToken({
     symbol,
     startBlock,
     endBlock,
     offset,
-    maxPages
+    maxPages,
+    maxAddresses
+  });
+
+  res.json({
+    success: true,
+    data,
+    meta: {}
+  });
+}
+
+async function ingestRecentTransfers(req, res) {
+  const { symbol } = req.validated.params;
+  const { blocksBack, offset, maxPages, maxAddresses } = req.validated.query;
+
+  const data = await transferIngestionService.ingestRecentTransfersForToken({
+    symbol,
+    blocksBack,
+    offset,
+    maxPages,
+    maxAddresses
   });
 
   res.json({
@@ -75,5 +95,6 @@ module.exports = {
   calculateCexFlows,
   calculateTokenMetrics,
   generateSignals,
-  ingestTransfers
+  ingestTransfers,
+  ingestRecentTransfers
 };

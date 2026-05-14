@@ -3,7 +3,8 @@ const transferIngestionRepository = require('./transferIngestion.repository');
 const NotFoundError = require('../../errors/NotFoundError');
 const BadRequestError = require('../../errors/BadRequestError');
 
-const SOURCE = 'etherscan_v2_cex_address_tokentx';
+const HISTORICAL_SOURCE = 'etherscan_v2_cex_address_tokentx';
+const RECENT_SOURCE = 'etherscan_v2_recent_cex_address_tokentx';
 const DEFAULT_REQUEST_DELAY_MS = 450;
 
 function normalizeAddress(address) {
@@ -11,27 +12,15 @@ function normalizeAddress(address) {
   return address.toLowerCase();
 }
 
-function numberValue(value) {
-  if (value === null || value === undefined || value === '') return 0;
-  return Number(value);
-}
-
 function toDecimalAmount(rawValue, decimals) {
   const raw = BigInt(rawValue || '0');
   const scale = BigInt(10) ** BigInt(decimals);
-
   const whole = raw / scale;
   const fraction = raw % scale;
-
   const fractionString = fraction.toString().padStart(decimals, '0').replace(/0+$/, '');
 
   if (!fractionString) return whole.toString();
-
   return `${whole.toString()}.${fractionString}`;
-}
-
-function buildTransferKey({ txHash, logIndex }) {
-  return `${txHash}:${logIndex}`;
 }
 
 function getLogIndex(item, fallbackIndex) {
@@ -44,6 +33,55 @@ function getLogIndex(item, fallbackIndex) {
   }
 
   return fallbackIndex;
+}
+
+function buildStableFingerprint({ source, txHash, blockNumber, fromAddressRaw, toAddressRaw, amountRaw }) {
+  return [
+    source,
+    String(txHash || '').toLowerCase(),
+    String(blockNumber || ''),
+    String(fromAddressRaw || '').toLowerCase(),
+    String(toAddressRaw || '').toLowerCase(),
+    String(amountRaw || '0')
+  ].join('|');
+}
+
+function buildFingerprintFromExistingTransfer(transfer) {
+  return buildStableFingerprint({
+    source: transfer.source,
+    txHash: transfer.tx_hash,
+    blockNumber: transfer.block_number,
+    fromAddressRaw: transfer.from_address_raw,
+    toAddressRaw: transfer.to_address_raw,
+    amountRaw: transfer.amount_raw
+  });
+}
+
+function buildCandidateFromEtherscanItem({ item, fallbackIndex, source }) {
+  const fromAddressRaw = normalizeAddress(item.from);
+  const toAddressRaw = normalizeAddress(item.to);
+  const txHash = item.hash;
+  const blockNumber = String(item.blockNumber);
+  const amountRaw = String(item.value || '0');
+
+  return {
+    item,
+    source,
+    txHash,
+    blockNumber,
+    logIndex: getLogIndex(item, fallbackIndex),
+    fromAddressRaw,
+    toAddressRaw,
+    amountRaw,
+    fingerprint: buildStableFingerprint({
+      source,
+      txHash,
+      blockNumber,
+      fromAddressRaw,
+      toAddressRaw,
+      amountRaw
+    })
+  };
 }
 
 async function resolveAddressId({ rawAddress, cexAddressMap }) {
@@ -63,14 +101,39 @@ async function resolveAddressId({ rawAddress, cexAddressMap }) {
   return address?.id || null;
 }
 
-async function ingestTransfersForToken({
-  symbol,
+function normalizeIngestionOptions({
   startBlock,
   endBlock,
-  offset = 100,
-  maxPages = 1,
-  maxAddresses
+  offset,
+  maxPages,
+  maxAddresses,
+  source,
+  latestBlock,
+  blocksBack
 }) {
+  const finalEndBlock = endBlock || latestBlock || Number(process.env.ETHERSCAN_INGEST_END_BLOCK || 999999999);
+
+  let finalStartBlock = startBlock;
+
+  if (latestBlock && blocksBack) {
+    finalStartBlock = Math.max(0, latestBlock - blocksBack);
+  }
+
+  if (!finalStartBlock && finalStartBlock !== 0) {
+    finalStartBlock = Number(process.env.ETHERSCAN_INGEST_START_BLOCK || 0);
+  }
+
+  return {
+    startBlock: finalStartBlock,
+    endBlock: finalEndBlock,
+    offset: offset || 100,
+    maxPages: maxPages || 1,
+    maxAddresses,
+    source
+  };
+}
+
+async function ingestTransfersCore({ symbol, startBlock, endBlock, offset = 100, maxPages = 1, maxAddresses, source }) {
   const token = await transferIngestionRepository.findTokenBySymbol(symbol);
 
   if (!token) {
@@ -78,13 +141,9 @@ async function ingestTransfersForToken({
   }
 
   if (!process.env.ETHERSCAN_API_KEY) {
-    throw new BadRequestError(
-      'ETHERSCAN_API_KEY is not configured',
-      'ETHERSCAN_API_KEY_MISSING',
-      {
-        env: 'ETHERSCAN_API_KEY'
-      }
-    );
+    throw new BadRequestError('ETHERSCAN_API_KEY is not configured', 'ETHERSCAN_API_KEY_MISSING', {
+      env: 'ETHERSCAN_API_KEY'
+    });
   }
 
   const cexAddressesAll = await transferIngestionRepository.findCexAddresses({
@@ -92,13 +151,9 @@ async function ingestTransfersForToken({
   });
 
   if (!cexAddressesAll.length) {
-    throw new BadRequestError(
-      'No CEX addresses found for ingestion',
-      'NO_CEX_ADDRESSES_FOUND',
-      {
-        chain: token.chain
-      }
-    );
+    throw new BadRequestError('No CEX addresses found for ingestion', 'NO_CEX_ADDRESSES_FOUND', {
+      chain: token.chain
+    });
   }
 
   const finalMaxAddresses = Number(
@@ -111,8 +166,6 @@ async function ingestTransfersForToken({
     cexAddressesAll.map((address) => [address.address.toLowerCase(), address])
   );
 
-  const finalStartBlock = startBlock || Number(process.env.ETHERSCAN_INGEST_START_BLOCK || 0);
-  const finalEndBlock = endBlock || Number(process.env.ETHERSCAN_INGEST_END_BLOCK || 999999999);
   const requestDelayMs = Number(process.env.ETHERSCAN_REQUEST_DELAY_MS || DEFAULT_REQUEST_DELAY_MS);
 
   const rawTransfers = [];
@@ -125,8 +178,8 @@ async function ingestTransfersForToken({
       const result = await etherscanClient.fetchErc20TransfersByAddress({
         address: cexAddress.address,
         contractAddress: token.contract_address,
-        startBlock: finalStartBlock,
-        endBlock: finalEndBlock,
+        startBlock,
+        endBlock,
         page,
         offset,
         sort: 'asc'
@@ -157,78 +210,76 @@ async function ingestTransfersForToken({
     });
   }
 
-  const transferCandidates = rawTransfers.map(({ item, fallbackIndex }) => {
-    const txHash = item.hash;
-    const logIndex = getLogIndex(item, fallbackIndex);
+  const candidates = rawTransfers.map(({ item, fallbackIndex }) => buildCandidateFromEtherscanItem({
+    item,
+    fallbackIndex,
+    source
+  }));
 
-    return {
-      txHash,
-      logIndex,
-      item
-    };
-  });
+  const txHashes = candidates.map((candidate) => candidate.txHash);
 
-  const existing = await transferIngestionRepository.findExistingTransfers({
+  const existing = await transferIngestionRepository.findExistingTransfersByHashes({
     tokenId: token.id,
-    transferKeys: transferCandidates
+    source,
+    txHashes
   });
 
-  const existingKeys = new Set(
-    existing.map((transfer) => buildTransferKey({
-      txHash: transfer.tx_hash,
-      logIndex: transfer.log_index
-    }))
-  );
-
-  const seenKeys = new Set();
+  const existingFingerprints = new Set(existing.map(buildFingerprintFromExistingTransfer));
+  const seenFingerprints = new Set();
   const rows = [];
 
-  for (const candidate of transferCandidates) {
-    const { item, txHash, logIndex } = candidate;
-    const key = buildTransferKey({ txHash, logIndex });
+  let skippedExistingDuplicates = 0;
+  let skippedBatchDuplicates = 0;
 
-    if (existingKeys.has(key) || seenKeys.has(key)) {
+  for (const candidate of candidates) {
+    if (existingFingerprints.has(candidate.fingerprint)) {
+      skippedExistingDuplicates += 1;
       continue;
     }
 
-    seenKeys.add(key);
+    if (seenFingerprints.has(candidate.fingerprint)) {
+      skippedBatchDuplicates += 1;
+      continue;
+    }
 
-    const fromRaw = normalizeAddress(item.from);
-    const toRaw = normalizeAddress(item.to);
+    seenFingerprints.add(candidate.fingerprint);
+
+    const { item } = candidate;
     const decimals = Number(item.tokenDecimal || token.decimals || 18);
-    const amountDecimal = toDecimalAmount(item.value || '0', decimals);
+    const amountDecimal = toDecimalAmount(candidate.amountRaw, decimals);
 
     const fromAddressId = await resolveAddressId({
-      rawAddress: fromRaw,
+      rawAddress: candidate.fromAddressRaw,
       cexAddressMap
     });
 
     const toAddressId = await resolveAddressId({
-      rawAddress: toRaw,
+      rawAddress: candidate.toAddressRaw,
       cexAddressMap
     });
 
     rows.push({
       token_id: token.id,
       chain: token.chain,
-      block_number: String(item.blockNumber),
-      tx_hash: txHash,
-      log_index: logIndex,
+      block_number: candidate.blockNumber,
+      tx_hash: candidate.txHash,
+      log_index: candidate.logIndex,
       from_address_id: fromAddressId,
       to_address_id: toAddressId,
-      from_address_raw: fromRaw,
-      to_address_raw: toRaw,
-      amount_raw: String(item.value || '0'),
+      from_address_raw: candidate.fromAddressRaw,
+      to_address_raw: candidate.toAddressRaw,
+      amount_raw: candidate.amountRaw,
       amount_decimal: amountDecimal,
       amount_usd: null,
       timestamp: new Date(Number(item.timeStamp) * 1000),
-      source: SOURCE,
+      source,
       created_at: new Date(),
       updated_at: new Date()
     });
   }
 
   const inserted = await transferIngestionRepository.bulkCreateTransfers(rows);
+  const skippedDuplicates = skippedExistingDuplicates + skippedBatchDuplicates;
 
   return {
     token: {
@@ -238,22 +289,74 @@ async function ingestTransfersForToken({
     },
     provider: 'etherscan',
     dataMode: 'real',
-    source: SOURCE,
+    source,
     cexAddressesAvailable: cexAddressesAll.length,
     cexAddressesChecked: cexAddresses.length,
     fetchedRaw: rawTransfers.length,
     inserted: inserted.length,
-    skippedDuplicates: rawTransfers.length - inserted.length,
-    startBlock: finalStartBlock,
-    endBlock: finalEndBlock,
+    skippedDuplicates,
+    skippedExistingDuplicates,
+    skippedBatchDuplicates,
+    startBlock,
+    endBlock,
     offset,
     maxPages,
     maxAddresses: finalMaxAddresses,
     requestDelayMs,
+    dedupeKey: 'source|txHash|blockNumber|from|to|amountRaw',
     addressStats
   };
 }
 
+async function ingestTransfersForToken({ symbol, startBlock, endBlock, offset = 100, maxPages = 1, maxAddresses }) {
+  const options = normalizeIngestionOptions({
+    startBlock,
+    endBlock,
+    offset,
+    maxPages,
+    maxAddresses,
+    source: HISTORICAL_SOURCE
+  });
+
+  return ingestTransfersCore({
+    symbol,
+    ...options
+  });
+}
+
+async function ingestRecentTransfersForToken({ symbol, blocksBack, offset = 100, maxPages = 1, maxAddresses }) {
+  const finalBlocksBack = Number(blocksBack || process.env.ETHERSCAN_RECENT_BLOCKS_BACK || 500000);
+
+  if (!Number.isInteger(finalBlocksBack) || finalBlocksBack <= 0) {
+    throw new BadRequestError('blocksBack must be a positive integer', 'INVALID_BLOCKS_BACK', {
+      blocksBack
+    });
+  }
+
+  const latestBlock = await etherscanClient.fetchLatestBlockNumber();
+
+  const options = normalizeIngestionOptions({
+    latestBlock,
+    blocksBack: finalBlocksBack,
+    offset,
+    maxPages,
+    maxAddresses,
+    source: RECENT_SOURCE
+  });
+
+  const result = await ingestTransfersCore({
+    symbol,
+    ...options
+  });
+
+  return {
+    ...result,
+    latestBlock,
+    blocksBack: finalBlocksBack
+  };
+}
+
 module.exports = {
-  ingestTransfersForToken
+  ingestTransfersForToken,
+  ingestRecentTransfersForToken
 };

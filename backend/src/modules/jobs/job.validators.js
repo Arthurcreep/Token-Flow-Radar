@@ -40,6 +40,17 @@ const optionalPositiveInteger = z
     message: 'must be a non-negative integer'
   });
 
+const optionalStrictPositiveInteger = z
+  .string()
+  .optional()
+  .transform((value) => {
+    if (value === undefined || value === '') return undefined;
+    return Number(value);
+  })
+  .refine((value) => value === undefined || (Number.isInteger(value) && value > 0), {
+    message: 'must be a positive integer'
+  });
+
 const optionalOffset = z
   .string()
   .optional()
@@ -56,6 +67,17 @@ const optionalMaxPages = z
   .transform((value) => Number(value))
   .refine((value) => Number.isInteger(value) && value > 0 && value <= 10, {
     message: 'maxPages must be between 1 and 10'
+  });
+
+const optionalMaxAddresses = z
+  .string()
+  .optional()
+  .transform((value) => {
+    if (value === undefined || value === '') return undefined;
+    return Number(value);
+  })
+  .refine((value) => value === undefined || (Number.isInteger(value) && value > 0 && value <= 100), {
+    message: 'maxAddresses must be between 1 and 100'
   });
 
 const calculateCexFlowsSchema = z.object({
@@ -97,7 +119,21 @@ const ingestTransfersSchema = z.object({
     startBlock: optionalPositiveInteger,
     endBlock: optionalPositiveInteger,
     offset: optionalOffset,
-    maxPages: optionalMaxPages
+    maxPages: optionalMaxPages,
+    maxAddresses: optionalMaxAddresses
+  }),
+  body: z.object({}).passthrough()
+});
+
+const ingestRecentTransfersSchema = z.object({
+  params: z.object({
+    symbol: symbolParam
+  }),
+  query: z.object({
+    blocksBack: optionalStrictPositiveInteger,
+    offset: optionalOffset,
+    maxPages: optionalMaxPages,
+    maxAddresses: optionalMaxAddresses
   }),
   body: z.object({}).passthrough()
 });
@@ -106,5 +142,6 @@ module.exports = {
   calculateCexFlowsSchema,
   calculateTokenMetricsSchema,
   generateSignalsSchema,
-  ingestTransfersSchema
+  ingestTransfersSchema,
+  ingestRecentTransfersSchema
 };
