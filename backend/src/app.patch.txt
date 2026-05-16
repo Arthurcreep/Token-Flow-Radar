@@ -1,0 +1,11 @@
+Add this to backend/src/app.js:
+
+1. Add import near other route imports:
+
+const marketLeaderboardRoutes = require('./modules/markets/marketLeaderboard.routes');
+
+2. Add route registration near other /api routes:
+
+app.use('/api/markets', marketLeaderboardRoutes);
+
+Do not remove existing routes.

@@ -6,6 +6,7 @@ import {
   getTokenOverview,
   getTokenSignals,
   getTokenTopHolders,
+  recalculateRecentCexFlows,
   refreshRecentCexFlowPipeline,
   refreshTokenPipeline
 } from '../api/tokensApi';
@@ -40,6 +41,7 @@ export default function TokenDetailPage() {
   const [refreshMessage, setRefreshMessage] = useState('');
 
   const [selectedRange, setSelectedRange] = useState('1m');
+  const [selectedThreshold, setSelectedThreshold] = useState(50000);
   const [recentRefreshStatus, setRecentRefreshStatus] = useState('idle');
   const [recentRefreshMessage, setRecentRefreshMessage] = useState('');
   const [recentValuation, setRecentValuation] = useState(null);
@@ -65,6 +67,13 @@ export default function TokenDetailPage() {
     setRecentCexFlows(recentCexFlowData);
     setHolders(holderData);
     setSignals(signalData);
+
+    const backendThreshold = recentCexFlowData?.largeTransferThresholdUsd
+      || recentCexFlowData?.summary?.largeTransferThresholdUsd;
+
+    if (backendThreshold) {
+      setSelectedThreshold(Number(backendThreshold));
+    }
   }
 
   useEffect(() => {
@@ -120,6 +129,36 @@ export default function TokenDetailPage() {
     }
   }
 
+  async function handleRecalculateThreshold() {
+    try {
+      setRecentRefreshStatus('loading');
+      setRecentRefreshMessage(
+        `Пересчитываем large-flow threshold ${selectedThreshold} USD на backend...`
+      );
+
+      const result = await recalculateRecentCexFlows(symbol, {
+        range: selectedRange,
+        largeTransferThresholdUsd: selectedThreshold
+      });
+
+      setRecentCexFlows(result.cexFlows);
+      setRecentRefreshStatus('success');
+      setRecentRefreshMessage(
+        `Готово: threshold=${selectedThreshold}, rows=${result.cexFlowJob.rowsCalculated}`
+      );
+
+      setTimeout(() => {
+        setRecentRefreshStatus('idle');
+        setRecentRefreshMessage('');
+      }, 4000);
+    } catch (error) {
+      setRecentRefreshStatus('error');
+      setRecentRefreshMessage(
+        error?.response?.data?.error?.message || 'Не удалось пересчитать threshold.'
+      );
+    }
+  }
+
   async function handleRefreshRecentCexFlows() {
     try {
       const rangeOption = getRangeOption(selectedRange);
@@ -136,14 +175,14 @@ export default function TokenDetailPage() {
         maxPages: selectedRange === '1y' ? 5 : 2,
         maxAddresses: 7,
         valuationLimit: selectedRange === '1y' ? 5000 : 1000,
-        largeTransferThresholdUsd: recentCexFlows?.largeTransferThresholdUsd || 50000
+        largeTransferThresholdUsd: selectedThreshold
       });
 
       setRecentCexFlows(result.cexFlows);
       setRecentValuation(result.valuation);
       setRecentRefreshStatus('success');
       setRecentRefreshMessage(
-        `Готово: range=${rangeOption.label}, fetched=${result.ingestion.fetchedRaw}, inserted=${result.ingestion.inserted}, valued=${result.valuation.updated}, skipped=${result.ingestion.skippedDuplicates}`
+        `Готово: range=${rangeOption.label}, threshold=${selectedThreshold}, fetched=${result.ingestion.fetchedRaw}, inserted=${result.ingestion.inserted}, valued=${result.valuation.updated}, skipped=${result.ingestion.skippedDuplicates}`
       );
 
       setTimeout(() => {
@@ -192,9 +231,12 @@ export default function TokenDetailPage() {
         valuation={recentValuation}
         selectedRange={selectedRange}
         onRangeChange={setSelectedRange}
+        selectedThreshold={selectedThreshold}
+        onThresholdChange={setSelectedThreshold}
         refreshStatus={recentRefreshStatus}
         refreshMessage={recentRefreshMessage}
         onRefresh={handleRefreshRecentCexFlows}
+        onRecalculateThreshold={handleRecalculateThreshold}
       />
 
       <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">

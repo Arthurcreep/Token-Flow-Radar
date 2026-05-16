@@ -144,6 +144,28 @@ export async function refreshRecentCexFlowPipeline(symbol, options = {}) {
   };
 }
 
+export async function recalculateRecentCexFlows(symbol, options = {}) {
+  const transferSource = 'etherscan_v2_recent_cex_address_tokentx';
+  const calculatedSource = 'calculated_from_etherscan_v2_recent_cex_address_tokentx';
+
+  const cexFlowJob = await calculateCexFlows(symbol, transferSource, {
+    largeTransferThresholdUsd: options.largeTransferThresholdUsd || 50000
+  });
+
+  const cexFlows = await getTokenCexFlows(symbol, {
+    source: calculatedSource,
+    range: options.range || '1m',
+    limit: 500
+  });
+
+  return {
+    cexFlowJob,
+    cexFlows,
+    transferSource,
+    calculatedSource
+  };
+}
+
 export async function ingestAndRefreshTokenPipeline(symbol) {
   const ingestion = await ingestTokenTransfers(symbol);
   const refreshed = await refreshTokenPipeline(symbol);

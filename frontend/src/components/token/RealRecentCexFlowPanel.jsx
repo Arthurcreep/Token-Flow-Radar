@@ -16,13 +16,22 @@ const RANGE_OPTIONS = [
   { value: '1y', label: '1Y', days: 365, blocksBack: 2630000 }
 ];
 
+const THRESHOLD_OPTIONS = [
+  { value: 10000, label: '$10K' },
+  { value: 50000, label: '$50K' },
+  { value: 100000, label: '$100K' },
+  { value: 500000, label: '$500K' }
+];
+
 const labels = {
   ru: {
     title: 'Real Recent CEX Flows',
     subtitle:
-      'Отдельный real-data слой. Summary, диапазон, active days и large-flow метрики теперь считает backend.',
+      'Отдельный real-data слой. Summary, диапазон, active days и large-flow метрики считает backend.',
     refresh: 'Обновить выбранный диапазон + USD',
     refreshing: 'Обновляем recent CEX flows и USD...',
+    recalculate: 'Пересчитать threshold',
+    recalculating: 'Пересчитываем threshold...',
     netflow: 'Netflow',
     inflow: 'Inflow на CEX',
     outflow: 'Outflow с CEX',
@@ -39,6 +48,8 @@ const labels = {
     latestDataDate: 'Последняя дата данных',
     loadedRows: 'Дневных строк в ответе',
     threshold: 'Large threshold',
+    thresholdHint:
+      'Порог крупного движения. Frontend только передает значение, backend пересчитывает large-flow metrics.',
     inflowHint: 'Завод на CEX = возможное давление продажи',
     outflowHint: 'Вывод с CEX = supply drain / снижение доступного supply',
     netflowHintPositive: 'CEX balance растет: возможный sell pressure',
@@ -60,9 +71,11 @@ const labels = {
   en: {
     title: 'Real Recent CEX Flows',
     subtitle:
-      'Separate real-data layer. Summary, range, active days and large-flow metrics are now calculated by backend.',
+      'Separate real-data layer. Summary, range, active days and large-flow metrics are calculated by backend.',
     refresh: 'Refresh selected range + USD',
     refreshing: 'Refreshing recent CEX flows and USD...',
+    recalculate: 'Recalculate threshold',
+    recalculating: 'Recalculating threshold...',
     netflow: 'Netflow',
     inflow: 'CEX Inflow',
     outflow: 'CEX Outflow',
@@ -79,6 +92,8 @@ const labels = {
     latestDataDate: 'Latest data date',
     loadedRows: 'Daily rows in response',
     threshold: 'Large threshold',
+    thresholdHint:
+      'Large movement threshold. Frontend only sends the value; backend recalculates large-flow metrics.',
     inflowHint: 'CEX inflow = possible sell pressure',
     outflowHint: 'CEX outflow = supply drain / lower available supply',
     netflowHintPositive: 'CEX balance is rising: possible sell pressure',
@@ -133,11 +148,11 @@ function getNetflowBadgeClass(value) {
   return 'border-slate-700 bg-slate-800 text-slate-300';
 }
 
-function FlowValue({ tokenValue, usdValue, signed = false }) {
+function FlowValue({ tokenValue, usdValue, signed = false, tokenSuffix = '' }) {
   return (
     <div>
       <p className={['text-2xl font-black', signed ? getNetflowMarketClass(tokenValue) : 'text-white'].join(' ')}>
-        {formatNumber(tokenValue)}
+        {formatNumber(tokenValue)}{tokenSuffix}
       </p>
       <p className={['mt-1 text-sm font-semibold', signed ? getNetflowMarketClass(usdValue) : 'text-slate-400'].join(' ')}>
         {formatCompactUsd(usdValue)}
@@ -146,7 +161,7 @@ function FlowValue({ tokenValue, usdValue, signed = false }) {
   );
 }
 
-function InfoTile({ label, value }) {
+function InfoTile({ label, value, hint }) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
@@ -155,6 +170,7 @@ function InfoTile({ label, value }) {
       <p className="mt-2 font-mono text-sm text-slate-200">
         {value || '—'}
       </p>
+      {hint && <p className="mt-2 text-xs leading-5 text-slate-500">{hint}</p>}
     </div>
   );
 }
@@ -166,7 +182,10 @@ export default function RealRecentCexFlowPanel({
   valuation,
   selectedRange,
   onRangeChange,
-  onRefresh
+  selectedThreshold,
+  onThresholdChange,
+  onRefresh,
+  onRecalculateThreshold
 }) {
   const language = getLanguage();
   const dictionary = labels[language];
@@ -175,10 +194,13 @@ export default function RealRecentCexFlowPanel({
   const items = cexFlows?.items || [];
   const range = cexFlows?.range || {};
   const selectedRangeOption = getRangeOption(selectedRange);
+  const actualThreshold = cexFlows?.largeTransferThresholdUsd || summary?.largeTransferThresholdUsd || selectedThreshold;
 
   const txCount = summary
     ? Number(summary.inflowTxCount || 0) + Number(summary.outflowTxCount || 0)
     : 0;
+
+  const isLoading = refreshStatus === 'loading';
 
   return (
     <section className="space-y-6">
@@ -186,33 +208,64 @@ export default function RealRecentCexFlowPanel({
         title={dictionary.title}
         subtitle={dictionary.subtitle}
         right={
-          <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-            <div className="grid grid-cols-4 gap-1 rounded-2xl border border-slate-800 bg-slate-950/80 p-1">
-              {RANGE_OPTIONS.map((item) => (
-                <button
-                  key={item.value}
-                  type="button"
-                  onClick={() => onRangeChange(item.value)}
-                  className={[
-                    'rounded-xl px-3 py-2 text-xs font-bold transition',
-                    selectedRange === item.value
-                      ? 'bg-cyan-400/15 text-cyan-200'
-                      : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300'
-                  ].join(' ')}
-                >
-                  {item.label}
-                </button>
-              ))}
+          <div className="flex flex-col items-stretch gap-3">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+              <div className="grid grid-cols-4 gap-1 rounded-2xl border border-slate-800 bg-slate-950/80 p-1">
+                {RANGE_OPTIONS.map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => onRangeChange(item.value)}
+                    className={[
+                      'rounded-xl px-3 py-2 text-xs font-bold transition',
+                      selectedRange === item.value
+                        ? 'bg-cyan-400/15 text-cyan-200'
+                        : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300'
+                    ].join(' ')}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-4 gap-1 rounded-2xl border border-slate-800 bg-slate-950/80 p-1">
+                {THRESHOLD_OPTIONS.map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => onThresholdChange(item.value)}
+                    className={[
+                      'rounded-xl px-3 py-2 text-xs font-bold transition',
+                      selectedThreshold === item.value
+                        ? 'bg-emerald-400/15 text-emerald-200'
+                        : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300'
+                    ].join(' ')}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <button
-              type="button"
-              onClick={onRefresh}
-              disabled={refreshStatus === 'loading'}
-              className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-xs font-bold text-emerald-200 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {refreshStatus === 'loading' ? dictionary.refreshing : dictionary.refresh}
-            </button>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={onRecalculateThreshold}
+                disabled={isLoading}
+                className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-xs font-bold text-cyan-200 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isLoading ? dictionary.recalculating : dictionary.recalculate}
+              </button>
+
+              <button
+                type="button"
+                onClick={onRefresh}
+                disabled={isLoading}
+                className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-xs font-bold text-emerald-200 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isLoading ? dictionary.refreshing : dictionary.refresh}
+              </button>
+            </div>
           </div>
         }
       >
@@ -252,7 +305,8 @@ export default function RealRecentCexFlowPanel({
 
           <InfoTile
             label={dictionary.threshold}
-            value={formatCompactUsd(cexFlows?.largeTransferThresholdUsd || summary?.largeTransferThresholdUsd)}
+            value={formatCompactUsd(actualThreshold)}
+            hint={dictionary.thresholdHint}
           />
         </div>
 
@@ -324,6 +378,7 @@ export default function RealRecentCexFlowPanel({
                   <FlowValue
                     tokenValue={summary.largeInflowCount}
                     usdValue={summary.largeInflowUsd}
+                    tokenSuffix=" tx"
                   />
                 }
                 hint={dictionary.largeHint}
@@ -340,6 +395,7 @@ export default function RealRecentCexFlowPanel({
                   <FlowValue
                     tokenValue={summary.largeOutflowCount}
                     usdValue={summary.largeOutflowUsd}
+                    tokenSuffix=" tx"
                   />
                 }
                 hint={dictionary.largeHint}
@@ -358,7 +414,7 @@ export default function RealRecentCexFlowPanel({
                       {formatCompactUsd(summary.largeNetflowUsd)}
                     </p>
                     <p className="mt-1 text-sm font-semibold text-slate-400">
-                      threshold {formatCompactUsd(summary.largeTransferThresholdUsd)}
+                      threshold {formatCompactUsd(actualThreshold)}
                     </p>
                   </div>
                 }
@@ -450,4 +506,4 @@ export default function RealRecentCexFlowPanel({
   );
 }
 
-export { RANGE_OPTIONS };
+export { RANGE_OPTIONS, THRESHOLD_OPTIONS };

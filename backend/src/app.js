@@ -12,7 +12,7 @@ const jobRoutes = require('./modules/jobs/job.routes');
 const holderRoutes = require('./modules/holders/holder.routes');
 const metricRoutes = require('./modules/metrics/metric.routes');
 const signalRoutes = require('./modules/signals/signal.routes');
-
+const marketLeaderboardRoutes = require('./modules/markets/marketLeaderboard.routes');
 
 const notFoundHandler = require('./middlewares/notFoundHandler');
 const errorHandler = require('./middlewares/errorHandler');
@@ -42,7 +42,7 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api', holderRoutes);
 app.use('/api', metricRoutes);
 app.use('/api', signalRoutes);
-
+app.use('/api/markets', marketLeaderboardRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
