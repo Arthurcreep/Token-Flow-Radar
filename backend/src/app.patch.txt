@@ -1,10 +1,9 @@
-Make sure backend/src/app.js has:
+Add this to backend/src/app.js:
 
-const tokenImportRoutes = require('./modules/token-import/tokenImport.routes');
+1. Add import near other route imports:
 
-and:
+const priceContextRoutes = require('./modules/price-context/priceContext.routes');
 
-app.use('/api/tokens', tokenImportRoutes);
-app.use('/api/tokens', tokenRoutes);
+2. Add route registration:
 
-tokenImportRoutes must be registered before tokenRoutes if tokenRoutes has broad dynamic routes.
+app.use('/api/price-context', priceContextRoutes);

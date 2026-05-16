@@ -1,85 +1,51 @@
 import { NavLink, Outlet } from 'react-router-dom';
 
-import { useTranslation } from '../../i18n/useTranslation';
-import LanguageSwitcher from './LanguageSwitcher';
-
-function navClass({ isActive }) {
+function getLinkClass({ isActive }) {
   return [
-    'group flex items-center justify-between rounded-2xl border px-4 py-3 transition',
+    'rounded-2xl px-4 py-2 text-sm font-bold transition',
     isActive
-      ? 'border-cyan-400/30 bg-cyan-400/10 text-white shadow-lg shadow-cyan-950/30'
-      : 'border-slate-800 bg-slate-900/50 text-slate-400 hover:border-slate-700 hover:bg-slate-800/70 hover:text-white'
+      ? 'bg-cyan-400/15 text-cyan-200'
+      : 'text-slate-400 hover:bg-slate-900 hover:text-slate-100'
   ].join(' ');
 }
 
 export default function AppLayout() {
-  const { t } = useTranslation();
-
-  const navItems = [
-    {
-      to: '/tokens',
-      label: t('common.tokens'),
-      hint: t('common.watchlist')
-    },
-    {
-      to: '/signals',
-      label: t('common.signals'),
-      hint: t('common.journal')
-    }
-  ];
-
   return (
-    <div className="min-h-screen">
-      <div className="mx-auto grid min-h-screen max-w-[1500px] grid-cols-1 lg:grid-cols-[280px_1fr]">
-        <aside className="border-b border-slate-800 bg-slate-950/70 px-5 py-5 backdrop-blur lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/30 bg-cyan-400/10 text-lg font-black text-cyan-300">
-              TFR
-            </div>
-
-            <div>
-              <h1 className="text-lg font-bold tracking-tight text-white">
-                {t('nav.title')}
-              </h1>
-              <p className="text-xs text-slate-500">
-                {t('nav.subtitle')}
-              </p>
-            </div>
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <header className="sticky top-0 z-30 border-b border-slate-900 bg-slate-950/90 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">
+              Token Flow Radar
+            </p>
+            <h1 className="mt-1 text-xl font-black text-white">
+              CEX Flow Intelligence
+            </h1>
           </div>
 
-          <div className="mt-6">
-            <LanguageSwitcher />
-          </div>
+          <nav className="flex flex-wrap items-center gap-2">
+            <NavLink to="/leaderboard" className={getLinkClass}>
+              Leaderboard
+            </NavLink>
 
-          <nav className="mt-8 grid gap-3">
-            {navItems.map((item) => (
-              <NavLink key={item.to} to={item.to} className={navClass}>
-                <span className="font-semibold">{item.label}</span>
-                <span className="text-xs text-slate-500 group-hover:text-slate-400">
-                  {item.hint}
-                </span>
-              </NavLink>
-            ))}
+            <NavLink to="/inspect" className={getLinkClass}>
+              Inspect
+            </NavLink>
+
+            <NavLink to="/tokens" className={getLinkClass}>
+              Tokens
+            </NavLink>
+
+            <NavLink to="/signals" className={getLinkClass}>
+              Signals
+            </NavLink>
           </nav>
+        </div>
+      </header>
 
-          <div className="mt-8 rounded-3xl border border-slate-800 bg-slate-900/60 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              {t('common.backend')}
-            </p>
-            <p className="mt-2 text-sm text-slate-300">
-              http://localhost:4000
-            </p>
-            <div className="mt-4 flex items-center gap-2 text-xs text-emerald-300">
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
-              {t('common.apiExpectedOnline')}
-            </div>
-          </div>
-        </aside>
-
-        <main className="px-4 py-6 md:px-8 lg:px-10">
-          <Outlet />
-        </main>
-      </div>
+      <main className="mx-auto max-w-7xl px-5 py-8">
+        <Outlet />
+      </main>
     </div>
   );
 }

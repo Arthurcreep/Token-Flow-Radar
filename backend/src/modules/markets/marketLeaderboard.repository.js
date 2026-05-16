@@ -102,10 +102,22 @@ async function findLeaderboardRows({
         MIN(cfd.date)::text AS active_from_date,
         MAX(cfd.date)::text AS active_to_date,
 
-        MAX(COALESCE(cfd.data_mode, 'unknown')) AS data_mode
+        MAX(COALESCE(cfd.data_mode, 'unknown')) AS data_mode,
+
+        MAX(pc.current_price_usd)::numeric AS current_price_usd,
+        MAX(pc.ath_usd)::numeric AS ath_usd,
+        MAX(pc.ath_date) AS ath_date,
+        MAX(pc.drawdown_from_ath_pct)::numeric AS drawdown_from_ath_pct,
+        MAX(pc.upside_to_ath_pct)::numeric AS upside_to_ath_pct,
+        MAX(pc.provider) AS price_provider,
+        MAX(pc.updated_at) AS price_updated_at
+
       FROM cex_flow_daily cfd
       INNER JOIN tokens t ON t.id = cfd.token_id
+      LEFT JOIN token_price_context pc ON pc.token_id = t.id
+
       WHERE ${whereSql}
+
       GROUP BY
         t.id,
         t.symbol,
@@ -113,9 +125,11 @@ async function findLeaderboardRows({
         t.chain,
         t.contract_address,
         t.coingecko_id
+
       ORDER BY
         ABS(SUM(cfd.cex_netflow_usd)) DESC,
         ABS(SUM(COALESCE(cfd.large_netflow_usd, 0))) DESC
+
       LIMIT :limit
       OFFSET :offset;
     `,

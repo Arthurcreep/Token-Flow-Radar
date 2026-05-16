@@ -32,13 +32,17 @@ function toNumber(value) {
 
 function formatDate(date) {
   if (!date) return null;
-  if (typeof date === 'string') return date.slice(0, 10);
+
+  if (typeof date === 'string') {
+    return date.slice(0, 10);
+  }
 
   return date.toISOString().slice(0, 10);
 }
 
 function addDays(dateString, days) {
   const date = new Date(`${dateString}T00:00:00.000Z`);
+
   date.setUTCDate(date.getUTCDate() + days);
 
   return formatDate(date);
@@ -152,6 +156,22 @@ function buildRangeWindow({
   };
 }
 
+function normalizePriceContext(row) {
+  if (row.current_price_usd === null || row.current_price_usd === undefined) {
+    return null;
+  }
+
+  return {
+    currentPriceUsd: toNumber(row.current_price_usd),
+    athUsd: toNumber(row.ath_usd),
+    athDate: row.ath_date || null,
+    drawdownFromAthPct: toNumber(row.drawdown_from_ath_pct),
+    upsideToAthPct: toNumber(row.upside_to_ath_pct),
+    provider: row.price_provider || null,
+    updatedAt: row.price_updated_at || null
+  };
+}
+
 function normalizeRow(row) {
   const cexNetflowUsd = toNumber(row.cex_netflow_usd);
   const cexNetflow = toNumber(row.cex_netflow);
@@ -167,8 +187,11 @@ function normalizeRow(row) {
       contractAddress: row.contract_address,
       coingeckoId: row.coingecko_id
     },
+
     dataMode: row.data_mode || 'unknown',
+
     activeDays,
+
     activeFlowWindow: {
       fromDate: row.active_from_date,
       toDate: row.active_to_date,
@@ -176,6 +199,7 @@ function normalizeRow(row) {
         ? `${row.active_from_date} → ${row.active_to_date}`
         : '—'
     },
+
     cex: {
       inflow: toNumber(row.cex_inflow),
       outflow: toNumber(row.cex_outflow),
@@ -186,6 +210,7 @@ function normalizeRow(row) {
       inflowTxCount: toNumber(row.inflow_tx_count),
       outflowTxCount: toNumber(row.outflow_tx_count)
     },
+
     large: {
       inflowCount: toNumber(row.large_inflow_count),
       outflowCount: toNumber(row.large_outflow_count),
@@ -194,13 +219,18 @@ function normalizeRow(row) {
       netflowUsd: largeNetflowUsd,
       thresholdUsd: toNumber(row.large_transfer_threshold_usd)
     },
+
+    priceContext: normalizePriceContext(row),
+
     regimeHint: getRegimeHint({
       cexNetflowUsd,
       cexNetflow
     }),
+
     largeFlowHint: getLargeFlowHint({
       largeNetflowUsd
     }),
+
     strength: getStrength({
       cexNetflowUsd,
       largeNetflowUsd,

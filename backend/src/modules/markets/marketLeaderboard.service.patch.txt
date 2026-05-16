@@ -1,0 +1,17 @@
+Patch backend/src/modules/markets/marketLeaderboard.service.js
+
+1. Inside normalizeRow(row), after large: {...}, add:
+
+    priceContext: row.current_price_usd === null || row.current_price_usd === undefined
+      ? null
+      : {
+          currentPriceUsd: toNumber(row.current_price_usd),
+          athUsd: toNumber(row.ath_usd),
+          athDate: row.ath_date,
+          drawdownFromAthPct: toNumber(row.drawdown_from_ath_pct),
+          upsideToAthPct: toNumber(row.upside_to_ath_pct),
+          provider: row.price_provider,
+          updatedAt: row.price_updated_at
+        },
+
+2. Do not change frontend yet if you want to test backend first.
