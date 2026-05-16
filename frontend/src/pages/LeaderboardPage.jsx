@@ -8,6 +8,7 @@ import LeaderboardFilters from '../components/leaderboard/LeaderboardFilters';
 import LeaderboardGuide from '../components/leaderboard/LeaderboardGuide';
 import LeaderboardRangeSwitch from '../components/leaderboard/LeaderboardRangeSwitch';
 import LeaderboardTable from '../components/leaderboard/LeaderboardTable';
+import LeaderboardOverview from '../components/leaderboard/LeaderboardOverview';
 
 function filterItems(items, selectedFilter) {
   if (selectedFilter === 'all') return items;
@@ -45,6 +46,14 @@ function filterItems(items, selectedFilter) {
   return items;
 }
 
+function translateRegimeHint(value) {
+  if (value === 'CEX_SUPPLY_DRAIN') return 'Вывод с бирж: предложение на CEX снижается';
+  if (value === 'CEX_SELL_PRESSURE') return 'Завод на биржи: возможно давление продажи';
+  if (value === 'NEUTRAL') return 'Нейтрально';
+
+  return 'Сигнал не определен';
+}
+
 export default function LeaderboardPage() {
   const [selectedRange, setSelectedRange] = useState('1m');
   const [selectedFilter, setSelectedFilter] = useState('all');
@@ -74,8 +83,13 @@ export default function LeaderboardPage() {
   const items = leaderboard?.items || [];
   const filteredItems = useMemo(() => filterItems(items, selectedFilter), [items, selectedFilter]);
 
-  if (status === 'loading') return <LoadingState message="Loading CEX flow leaderboard..." />;
-  if (status === 'error') return <ErrorState message="Failed to load CEX flow leaderboard." />;
+  if (status === 'loading') {
+    return <LoadingState message="Загружаем рейтинг CEX-потоков..." />;
+  }
+
+  if (status === 'error') {
+    return <ErrorState message="Не удалось загрузить рейтинг CEX-потоков." />;
+  }
 
   const range = leaderboard?.range || {};
   const topItem = filteredItems[0] || items[0];
@@ -84,10 +98,18 @@ export default function LeaderboardPage() {
     <div className="space-y-8">
       <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-cyan-300">Markets</p>
-          <h1 className="mt-3 text-4xl font-black text-white">CEX Flow Leaderboard</h1>
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-cyan-300">
+            Рынок
+          </p>
+
+          <h1 className="mt-3 text-4xl font-black text-white">
+            Рейтинг CEX-потоков
+          </h1>
+
           <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">
-            Ranking of tokens by backend-calculated CEX inflow/outflow behavior. This is a flow-anomaly shortlist, not a buy/sell signal.
+            Здесь показано, какие токены заводят на известные биржевые кошельки и какие токены выводят с них.
+            Вывод с бирж может означать снижение доступного предложения, а завод на биржи может означать возможное давление продажи.
+            Это исследовательская витрина, а не команда покупать или продавать.
           </p>
         </div>
 
@@ -100,29 +122,51 @@ export default function LeaderboardPage() {
         <LeaderboardFilters selectedFilter={selectedFilter} onChange={setSelectedFilter} />
 
         <p className="text-sm text-slate-500">
-          Filtered: <span className="font-bold text-slate-300">{filteredItems.length}</span> / {items.length}
+          Показано:{' '}
+          <span className="font-bold text-slate-300">{filteredItems.length}</span>
+          {' '}из {items.length}
         </p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-4">
-        <Card title="Range" subtitle={range.calendarWindow || '—'}>
-          <p className="text-2xl font-black text-white">{range.label || selectedRange.toUpperCase()}</p>
-          <p className="mt-2 text-sm text-slate-500">Latest data date: {range.latestDataDate || '—'}</p>
+        <Card title="Диапазон" subtitle={range.calendarWindow || '—'}>
+          <p className="text-2xl font-black text-white">
+            {range.label || selectedRange.toUpperCase()}
+          </p>
+
+          <p className="mt-2 text-sm text-slate-500">
+            Последняя дата данных: {range.latestDataDate || '—'}
+          </p>
         </Card>
 
-        <Card title="Tokens" subtitle="Loaded into leaderboard">
-          <p className="text-2xl font-black text-white">{range.loadedTokens ?? items.length}</p>
-          <p className="mt-2 text-sm text-slate-500">Source: real recent CEX flows</p>
+        <Card title="Токены" subtitle="Попали в текущий рейтинг">
+          <p className="text-2xl font-black text-white">
+            {range.loadedTokens ?? items.length}
+          </p>
+
+          <p className="mt-2 text-sm text-slate-500">
+            Источник: реальные свежие переводы по CEX-адресам
+          </p>
         </Card>
 
-        <Card title="Top visible signal" subtitle="Highest ranked after filter">
-          <p className="text-2xl font-black text-white">{topItem?.token?.symbol || '—'}</p>
-          <p className="mt-2 text-sm text-slate-500">{topItem?.regimeHint?.replaceAll('_', ' ') || 'No signal'}</p>
+        <Card title="Главный видимый сигнал" subtitle="Первый токен после выбранных фильтров">
+          <p className="text-2xl font-black text-white">
+            {topItem?.token?.symbol || '—'}
+          </p>
+
+          <p className="mt-2 text-sm text-slate-500">
+            {translateRegimeHint(topItem?.regimeHint)}
+          </p>
         </Card>
 
-        <Card title="Data mode" subtitle="Current leaderboard source">
-          <p className="text-2xl font-black text-emerald-300">real</p>
-          <p className="mt-2 break-all text-xs text-slate-500">{leaderboard?.source || '—'}</p>
+        <Card title="Режим данных" subtitle="Источник текущего расчета">
+          <p className="text-2xl font-black text-emerald-300">
+            реальные данные
+          </p>
+
+          <p className="mt-2 break-all text-xs text-slate-500">
+            {leaderboard?.source || '—'}
+          </p>
         </Card>
       </div>
 
@@ -132,7 +176,13 @@ export default function LeaderboardPage() {
         </div>
       )}
 
-      <LeaderboardTable items={filteredItems} totalItems={items.length} selectedFilter={selectedFilter} />
+      <LeaderboardOverview items={filteredItems} />
+
+      <LeaderboardTable
+        items={filteredItems}
+        totalItems={items.length}
+        selectedFilter={selectedFilter}
+      />
     </div>
   );
 }

@@ -3,49 +3,49 @@ import Card from '../common/Card';
 export default function LeaderboardGuide() {
   return (
     <Card
-      title="How to read this table"
-      subtitle="This leaderboard is a flow-anomaly shortlist. It is not a buy/sell signal."
+      title="Как читать эту таблицу"
+      subtitle="Это список токенов с необычными потоками на биржевых кошельках. Это не торговый сигнал."
     >
       <div className="grid gap-4 lg:grid-cols-6">
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-          <p className="text-sm font-black text-emerald-300">Negative Netflow USD</p>
+          <p className="text-sm font-black text-emerald-300">Минусовой netflow</p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            Tokens are leaving known CEX wallets. This is interpreted as <span className="font-semibold text-emerald-300">supply drain</span>.
+            Токены в сумме выходят с известных CEX-кошельков. Это может означать снижение доступного предложения на биржах.
           </p>
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-          <p className="text-sm font-black text-red-300">Positive Netflow USD</p>
+          <p className="text-sm font-black text-red-300">Плюсовой netflow</p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            Tokens are entering known CEX wallets. This can indicate <span className="font-semibold text-red-300">possible sell pressure</span>.
+            Токены в сумме заходят на известные CEX-кошельки. Это может означать возможное давление продажи.
           </p>
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-          <p className="text-sm font-black text-cyan-300">Profile</p>
+          <p className="text-sm font-black text-cyan-300">Профиль</p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            Backend interpretation of flow, recovery context, and risk flags. It is not a trade command.
+            Короткое объяснение от backend: поток чистый, спекулятивный, смешанный или слабый. Это не команда на сделку.
           </p>
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-          <p className="text-sm font-black text-cyan-300">Large Netflow</p>
+          <p className="text-sm font-black text-cyan-300">Крупный netflow</p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            Same direction logic, but only for transfers above the selected USD threshold.
+            Та же логика, но только по переводам выше заданного USD-порога. Это помогает отделить шум от крупных движений.
           </p>
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-          <p className="text-sm font-black text-amber-300">To ATH</p>
+          <p className="text-sm font-black text-amber-300">До ATH</p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            Historical recovery distance to previous all-time high. It is <span className="font-semibold text-amber-300">not a forecast</span>.
+            Расстояние от текущей цены до прошлого исторического максимума. Это справка, а не прогноз прибыли.
           </p>
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
           <p className="text-sm font-black text-fuchsia-300">out / in</p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            Count of large outflow and inflow transactions. It is not token amount.
+            Количество крупных выводов и заводов. Это число транзакций, а не количество токенов.
           </p>
         </div>
       </div>

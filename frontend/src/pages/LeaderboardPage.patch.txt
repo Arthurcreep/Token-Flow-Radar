@@ -1,0 +1,33 @@
+Patch frontend/src/pages/LeaderboardPage.jsx
+
+1. Add import:
+
+import LeaderboardOverview from '../components/leaderboard/LeaderboardOverview';
+
+2. Find where LeaderboardTable is rendered.
+
+Usually it looks like:
+
+<LeaderboardTable
+  items={items}
+  totalItems={meta.total}
+  selectedFilter={selectedFilter}
+/>
+
+3. Place this directly above LeaderboardTable:
+
+<LeaderboardOverview items={items} />
+
+Full target area should become approximately:
+
+<LeaderboardOverview items={items} />
+
+<LeaderboardTable
+  items={items}
+  totalItems={meta.total}
+  selectedFilter={selectedFilter}
+/>
+
+If your page stores the response as data.items, use:
+
+<LeaderboardOverview items={data.items || []} />

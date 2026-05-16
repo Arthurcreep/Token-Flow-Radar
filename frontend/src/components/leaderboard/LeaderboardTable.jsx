@@ -12,27 +12,27 @@ import Card from '../common/Card';
 const PROFILE_FILTERS = [
   {
     value: 'all',
-    label: 'All'
+    label: 'Все'
   },
   {
     value: 'clean_supply_drain',
-    label: 'Clean supply drain'
+    label: 'Чистый вывод'
   },
   {
     value: 'speculative_recovery_candidate',
-    label: 'Speculative recovery'
+    label: 'Спекулятивные'
   },
   {
     value: 'mixed_flow',
-    label: 'Mixed flow'
+    label: 'Смешанные'
   },
   {
     value: 'unconfirmed_flow',
-    label: 'Unconfirmed'
+    label: 'Без подтверждения'
   },
   {
     value: 'sell_pressure_watch',
-    label: 'Sell pressure'
+    label: 'Давление продажи'
   }
 ];
 
@@ -105,15 +105,97 @@ function getDrawdownClass(value) {
   return 'text-slate-400';
 }
 
-function normalizeLabel(value) {
-  return String(value || 'unknown').replaceAll('_', ' ');
+function translateRegime(value) {
+  if (value === 'CEX_SUPPLY_DRAIN') return 'Вывод с бирж';
+  if (value === 'CEX_SELL_PRESSURE') return 'Завод на биржи';
+  if (value === 'NEUTRAL') return 'Нейтрально';
+
+  return 'Не определено';
+}
+
+function translateLargeFlow(value) {
+  if (value === 'LARGE_SUPPLY_DRAIN') return 'Крупный вывод';
+  if (value === 'LARGE_SELL_PRESSURE') return 'Крупный завод';
+  if (value === 'NO_LARGE_FLOW') return 'Нет крупных';
+
+  return 'Не определено';
+}
+
+function translateProfile(value) {
+  if (value === 'clean_supply_drain') return 'Чистый вывод';
+  if (value === 'speculative_recovery_candidate') return 'Спекулятивное восстановление';
+  if (value === 'mixed_flow') return 'Смешанный сигнал';
+  if (value === 'unconfirmed_flow') return 'Без подтверждения';
+  if (value === 'sell_pressure_watch') return 'Давление продажи';
+  if (value === 'weak_signal') return 'Слабый сигнал';
+
+  return 'Профиль не определен';
+}
+
+function translateRecovery(value) {
+  if (value === 'extreme') return 'экстремально далеко от ATH';
+  if (value === 'high') return 'сильно ниже ATH';
+  if (value === 'medium') return 'умеренно ниже ATH';
+  if (value === 'low') return 'недалеко от ATH';
+
+  return 'без оценки';
+}
+
+function translateStrength(value) {
+  if (value === 'very_strong') return 'очень сильный';
+  if (value === 'strong') return 'сильный';
+  if (value === 'moderate') return 'умеренный';
+  if (value === 'weak') return 'слабый';
+
+  return 'нет оценки';
+}
+
+function translateRiskFlag(value) {
+  if (value === 'large_layer_conflict') return 'крупные переводы спорят с общим потоком';
+  if (value === 'no_large_flow_confirmation') return 'нет подтверждения крупными переводами';
+  if (value === 'weak_flow') return 'слабый поток';
+  if (value === 'thin_active_days') return 'мало активных дней';
+  if (value === 'extreme_ath_drawdown') return 'экстремальная просадка от ATH';
+  if (value === 'deep_ath_drawdown') return 'глубокая просадка от ATH';
+  if (value === 'extreme_recovery_distance') return 'экстремальная дистанция до ATH';
+  if (value === 'low_usd_flow') return 'малый объем в USD';
+  if (value === 'zero_large_netflow') return 'нулевой крупный netflow';
+
+  return String(value || 'риск не определен').replaceAll('_', ' ');
+}
+
+function translateInterpretation(item) {
+  const symbol = item.token?.symbol || 'Токен';
+  const profile = item.analysisProfile?.profileLabel;
+
+  if (profile === 'clean_supply_drain') {
+    return `${symbol}: токены выходят с бирж, и это подтверждается крупными переводами. Это самый чистый тип сигнала.`;
+  }
+
+  if (profile === 'speculative_recovery_candidate') {
+    return `${symbol}: вывод с бирж есть, но токен сильно ниже ATH. Потенциал восстановления большой, но риск тоже высокий.`;
+  }
+
+  if (profile === 'mixed_flow') {
+    return `${symbol}: общий поток и крупные переводы показывают разную картину. Сигнал грязный.`;
+  }
+
+  if (profile === 'unconfirmed_flow') {
+    return `${symbol}: движение есть, но крупные переводы его не подтверждают. Сигнал слабее.`;
+  }
+
+  if (profile === 'sell_pressure_watch') {
+    return `${symbol}: токены заходят на биржи. Это может быть давлением продажи, а не накоплением.`;
+  }
+
+  return `${symbol}: по токену пока нет понятного профиля.`;
 }
 
 function getTokenDirectionNote(item) {
-  if (item.regimeHint === 'CEX_SUPPLY_DRAIN' && item.largeFlowHint === 'LARGE_SUPPLY_DRAIN') return 'General and large flows agree';
-  if (item.regimeHint === 'CEX_SELL_PRESSURE' && item.largeFlowHint === 'LARGE_SELL_PRESSURE') return 'General and large flows agree';
-  if (item.largeFlowHint === 'NO_LARGE_FLOW') return 'No large-flow confirmation';
-  return 'Mixed general vs large layer';
+  if (item.regimeHint === 'CEX_SUPPLY_DRAIN' && item.largeFlowHint === 'LARGE_SUPPLY_DRAIN') return 'Общий поток и крупные переводы совпадают';
+  if (item.regimeHint === 'CEX_SELL_PRESSURE' && item.largeFlowHint === 'LARGE_SELL_PRESSURE') return 'Общий поток и крупные переводы совпадают';
+  if (item.largeFlowHint === 'NO_LARGE_FLOW') return 'Крупные переводы не подтверждают сигнал';
+  return 'Общий поток и крупные переводы спорят';
 }
 
 function formatPercent(value, digits = 1) {
@@ -187,8 +269,8 @@ function PriceContextCell({ priceContext }) {
   if (!priceContext) {
     return (
       <div>
-        <p className="font-semibold text-slate-500">No price context</p>
-        <p className="mt-1 text-xs text-slate-600">Run price context update</p>
+        <p className="font-semibold text-slate-500">Нет ценового контекста</p>
+        <p className="mt-1 text-xs text-slate-600">Нужно обновить price context</p>
       </div>
     );
   }
@@ -204,11 +286,11 @@ function PriceContextCell({ priceContext }) {
       </p>
 
       <p className={['mt-2 text-xs font-bold', getDrawdownClass(priceContext.drawdownFromAthPct)].join(' ')}>
-        DD {formatPercent(priceContext.drawdownFromAthPct)}
+        От ATH {formatPercent(priceContext.drawdownFromAthPct)}
       </p>
 
       <p className="mt-1 text-xs font-bold text-cyan-300">
-        To ATH {formatPercent(priceContext.upsideToAthPct)}
+        До ATH {formatPercent(priceContext.upsideToAthPct)}
       </p>
     </div>
   );
@@ -218,7 +300,7 @@ function RiskFlags({ flags = [] }) {
   if (!flags.length) {
     return (
       <p className="mt-2 text-xs text-emerald-300">
-        no major flags
+        крупных риск-флагов нет
       </p>
     );
   }
@@ -230,7 +312,7 @@ function RiskFlags({ flags = [] }) {
           key={flag}
           className="rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-semibold text-slate-400"
         >
-          {normalizeLabel(flag)}
+          {translateRiskFlag(flag)}
         </span>
       ))}
 
@@ -243,12 +325,14 @@ function RiskFlags({ flags = [] }) {
   );
 }
 
-function ProfileCell({ analysisProfile }) {
+function ProfileCell({ item }) {
+  const analysisProfile = item.analysisProfile;
+
   if (!analysisProfile) {
     return (
       <div>
-        <p className="font-semibold text-slate-500">No profile</p>
-        <p className="mt-1 text-xs text-slate-600">Update backend profile</p>
+        <p className="font-semibold text-slate-500">Нет профиля</p>
+        <p className="mt-1 text-xs text-slate-600">Backend еще не вернул analysisProfile</p>
       </div>
     );
   }
@@ -257,16 +341,16 @@ function ProfileCell({ analysisProfile }) {
     <div className="min-w-[260px]">
       <div className="flex flex-wrap items-center gap-2">
         <Badge className={getProfileClass(analysisProfile.profileLabel)}>
-          {normalizeLabel(analysisProfile.profileLabel)}
+          {translateProfile(analysisProfile.profileLabel)}
         </Badge>
 
         <span className={['text-xs font-bold', getRecoveryClass(analysisProfile.recoveryContext)].join(' ')}>
-          {normalizeLabel(analysisProfile.recoveryContext)}
+          {translateRecovery(analysisProfile.recoveryContext)}
         </span>
       </div>
 
       <p className="mt-2 text-xs leading-5 text-slate-400">
-        {analysisProfile.interpretation}
+        {translateInterpretation(item)}
       </p>
 
       <RiskFlags flags={analysisProfile.riskFlags || []} />
@@ -274,7 +358,7 @@ function ProfileCell({ analysisProfile }) {
   );
 }
 
-export default function LeaderboardTable({ items = [], totalItems = 0, selectedFilter = 'all' }) {
+export default function LeaderboardTable({ items = [], totalItems = 0 }) {
   const [selectedProfile, setSelectedProfile] = useState('all');
 
   const filteredItems = useMemo(() => {
@@ -285,12 +369,12 @@ export default function LeaderboardTable({ items = [], totalItems = 0, selectedF
 
   return (
     <Card
-      title="CEX Flow Leaderboard"
-      subtitle={`Showing ${filteredItems.length} of ${totalItems} tokens. Negative netflow means supply leaves known CEX wallets.`}
+      title="Таблица токенов"
+      subtitle={`Показано ${filteredItems.length} из ${totalItems}. Минусовой netflow означает, что токены выходят с известных CEX-кошельков.`}
     >
       <div className="mb-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs leading-5 text-amber-100/80">
-        <span className="font-bold text-amber-200">To ATH is not a forecast.</span>{' '}
-        It only shows historical recovery distance from current price back to the previous all-time high.
+        <span className="font-bold text-amber-200">До ATH — это не прогноз.</span>{' '}
+        Это только расстояние от текущей цены до прошлого исторического максимума.
       </div>
 
       <ProfileFilters
@@ -303,16 +387,16 @@ export default function LeaderboardTable({ items = [], totalItems = 0, selectedF
         <table className="min-w-full text-left text-sm">
           <thead>
             <tr className="border-b border-slate-800 text-xs uppercase tracking-[0.16em] text-slate-500">
-              <th className="px-4 py-3">Token</th>
-              <th className="px-4 py-3">Profile</th>
-              <th className="px-4 py-3">Regime</th>
-              <th className="px-4 py-3">Netflow USD</th>
-              <th className="px-4 py-3">Large Netflow</th>
-              <th className="px-4 py-3">Price Context</th>
-              <th className="px-4 py-3">Large Flow</th>
-              <th className="px-4 py-3">Active</th>
-              <th className="px-4 py-3">Strength</th>
-              <th className="px-4 py-3">Read</th>
+              <th className="px-4 py-3">Токен</th>
+              <th className="px-4 py-3">Профиль</th>
+              <th className="px-4 py-3">Режим</th>
+              <th className="px-4 py-3">Netflow в USD</th>
+              <th className="px-4 py-3">Крупный netflow</th>
+              <th className="px-4 py-3">Цена / ATH</th>
+              <th className="px-4 py-3">Крупные переводы</th>
+              <th className="px-4 py-3">Активность</th>
+              <th className="px-4 py-3">Сила</th>
+              <th className="px-4 py-3">Пояснение</th>
             </tr>
           </thead>
 
@@ -329,11 +413,11 @@ export default function LeaderboardTable({ items = [], totalItems = 0, selectedF
                 </td>
 
                 <td className="px-4 py-4">
-                  <ProfileCell analysisProfile={item.analysisProfile} />
+                  <ProfileCell item={item} />
                 </td>
 
                 <td className="px-4 py-4">
-                  <Badge className={getRegimeClass(item.regimeHint)}>{normalizeLabel(item.regimeHint)}</Badge>
+                  <Badge className={getRegimeClass(item.regimeHint)}>{translateRegime(item.regimeHint)}</Badge>
                 </td>
 
                 <td className="px-4 py-4">
@@ -341,10 +425,10 @@ export default function LeaderboardTable({ items = [], totalItems = 0, selectedF
                     {formatCompactUsd(item.cex.netflowUsd)}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    in {formatCompactUsd(item.cex.inflowUsd)} / out {formatCompactUsd(item.cex.outflowUsd)}
+                    завод {formatCompactUsd(item.cex.inflowUsd)} / вывод {formatCompactUsd(item.cex.outflowUsd)}
                   </p>
                   <p className="mt-1 text-xs text-slate-600">
-                    {formatNumber(item.cex.netflow)} token netflow
+                    {formatNumber(item.cex.netflow)} токенов netflow
                   </p>
                 </td>
 
@@ -352,7 +436,7 @@ export default function LeaderboardTable({ items = [], totalItems = 0, selectedF
                   <p className={['font-black', getSignedUsdClass(item.large.netflowUsd)].join(' ')}>
                     {formatCompactUsd(item.large.netflowUsd)}
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">threshold {formatCompactUsd(item.large.thresholdUsd)}</p>
+                  <p className="mt-1 text-xs text-slate-500">порог {formatCompactUsd(item.large.thresholdUsd)}</p>
                 </td>
 
                 <td className="px-4 py-4">
@@ -360,19 +444,19 @@ export default function LeaderboardTable({ items = [], totalItems = 0, selectedF
                 </td>
 
                 <td className="px-4 py-4">
-                  <Badge className={getLargeFlowClass(item.largeFlowHint)}>{normalizeLabel(item.largeFlowHint)}</Badge>
+                  <Badge className={getLargeFlowClass(item.largeFlowHint)}>{translateLargeFlow(item.largeFlowHint)}</Badge>
                   <p className="mt-2 text-xs text-slate-500">
-                    out {formatNumber(item.large.outflowCount, 0)} / in {formatNumber(item.large.inflowCount, 0)}
+                    вывод {formatNumber(item.large.outflowCount, 0)} / завод {formatNumber(item.large.inflowCount, 0)}
                   </p>
                 </td>
 
                 <td className="px-4 py-4">
-                  <p className="font-semibold text-slate-200">{item.activeDays} days</p>
+                  <p className="font-semibold text-slate-200">{item.activeDays} дн.</p>
                   <p className="mt-1 whitespace-nowrap text-xs text-slate-500">{item.activeFlowWindow?.label || '—'}</p>
                 </td>
 
                 <td className="px-4 py-4">
-                  <Badge className={getStrengthClass(item.strength)}>{normalizeLabel(item.strength)}</Badge>
+                  <Badge className={getStrengthClass(item.strength)}>{translateStrength(item.strength)}</Badge>
                 </td>
 
                 <td className="px-4 py-4">
@@ -386,16 +470,16 @@ export default function LeaderboardTable({ items = [], totalItems = 0, selectedF
 
       {!filteredItems.length && (
         <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/60 p-8 text-center">
-          <p className="font-semibold text-slate-300">No tokens match this filter.</p>
+          <p className="font-semibold text-slate-300">Под этот фильтр нет токенов.</p>
           <p className="mt-2 text-sm text-slate-500">
-            Current profile filter: {PROFILE_FILTERS.find((item) => item.value === selectedProfile)?.label || selectedProfile}.
+            Попробуй выбрать “Все” или другой профиль.
           </p>
           <button
             type="button"
             onClick={() => setSelectedProfile('all')}
             className="mt-4 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-xs font-bold text-cyan-200 transition hover:bg-cyan-500/20"
           >
-            Reset profile filter
+            Сбросить фильтр профиля
           </button>
         </div>
       )}

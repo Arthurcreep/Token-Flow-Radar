@@ -19,7 +19,6 @@ export default function App() {
         <Route path="tokens" element={<TokensPage />} />
         <Route path="tokens/signals" element={<Navigate to="/signals" replace />} />
         <Route path="tokens/:symbol" element={<TokenDetailPage />} />
-
         <Route path="signals" element={<SignalsPage />} />
 
         <Route path="*" element={<Navigate to="/leaderboard" replace />} />

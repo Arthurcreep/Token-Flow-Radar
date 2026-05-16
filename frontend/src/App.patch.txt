@@ -1,0 +1,18 @@
+Patch frontend/src/App.jsx
+
+1. Add import:
+
+import TokenDetailPage from './pages/TokenDetailPage';
+
+2. Add route:
+
+<Route path="/tokens/:symbol" element={<TokenDetailPage />} />
+
+Example area:
+
+<Routes>
+  ...
+  <Route path="/leaderboard" element={<LeaderboardPage />} />
+  <Route path="/tokens/:symbol" element={<TokenDetailPage />} />
+  ...
+</Routes>
