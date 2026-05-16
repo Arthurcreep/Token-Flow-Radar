@@ -44,7 +44,7 @@ export default function TokenDetailPage() {
   const [recentRefreshMessage, setRecentRefreshMessage] = useState('');
   const [recentValuation, setRecentValuation] = useState(null);
 
-  async function loadTokenDashboard() {
+  async function loadTokenDashboard(range = selectedRange) {
     const [
       overviewData,
       recentCexFlowData,
@@ -52,7 +52,11 @@ export default function TokenDetailPage() {
       signalData
     ] = await Promise.all([
       getTokenOverview(symbol),
-      getTokenCexFlows(symbol, RECENT_CEX_FLOW_SOURCE).catch(() => null),
+      getTokenCexFlows(symbol, {
+        source: RECENT_CEX_FLOW_SOURCE,
+        range,
+        limit: 500
+      }).catch(() => null),
       getTokenTopHolders(symbol).catch(() => null),
       getTokenSignals(symbol).catch(() => [])
     ]);
@@ -66,7 +70,7 @@ export default function TokenDetailPage() {
   useEffect(() => {
     async function load() {
       try {
-        await loadTokenDashboard();
+        await loadTokenDashboard(selectedRange);
         setStatus('ready');
       } catch (error) {
         setStatus('error');
@@ -75,6 +79,15 @@ export default function TokenDetailPage() {
 
     load();
   }, [symbol]);
+
+  useEffect(() => {
+    if (status !== 'ready') return;
+
+    loadTokenDashboard(selectedRange).catch(() => {
+      setRecentRefreshStatus('error');
+      setRecentRefreshMessage('Не удалось загрузить CEX flows для выбранного диапазона.');
+    });
+  }, [selectedRange]);
 
   async function handleRefreshData() {
     if (overview?.dataMode === 'mixed' || overview?.dataMode === 'real') {
@@ -90,7 +103,7 @@ export default function TokenDetailPage() {
       setRefreshMessage(t('common.pipelineRunning'));
 
       await refreshTokenPipeline(symbol);
-      await loadTokenDashboard();
+      await loadTokenDashboard(selectedRange);
 
       setRefreshStatus('success');
       setRefreshMessage(t('common.pipelineRefreshed'));
@@ -117,11 +130,13 @@ export default function TokenDetailPage() {
       );
 
       const result = await refreshRecentCexFlowPipeline(symbol, {
+        range: selectedRange,
         blocksBack: rangeOption.blocksBack,
         offset: 50,
         maxPages: selectedRange === '1y' ? 5 : 2,
         maxAddresses: 7,
-        valuationLimit: selectedRange === '1y' ? 5000 : 1000
+        valuationLimit: selectedRange === '1y' ? 5000 : 1000,
+        largeTransferThresholdUsd: recentCexFlows?.largeTransferThresholdUsd || 50000
       });
 
       setRecentCexFlows(result.cexFlows);

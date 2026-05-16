@@ -10,9 +10,22 @@ export async function getTokenOverview(symbol) {
   return response.data.data;
 }
 
-export async function getTokenCexFlows(symbol, source) {
+export async function getTokenCexFlows(symbol, options = {}) {
+  const params = {};
+
+  if (typeof options === 'string') {
+    params.source = options;
+  } else {
+    if (options.source) params.source = options.source;
+    if (options.range) params.range = options.range;
+    if (options.fromDate) params.fromDate = options.fromDate;
+    if (options.toDate) params.toDate = options.toDate;
+    if (options.limit) params.limit = options.limit;
+    if (options.offset !== undefined) params.offset = options.offset;
+  }
+
   const response = await apiClient.get(`/tokens/${symbol}/cex-flows`, {
-    params: source ? { source } : {}
+    params
   });
 
   return response.data.data;
@@ -64,9 +77,14 @@ export async function valueTokenTransfers(symbol, options = {}) {
   return response.data.data;
 }
 
-export async function calculateCexFlows(symbol, source) {
+export async function calculateCexFlows(symbol, source, options = {}) {
   const response = await apiClient.post(`/jobs/calculate-cex-flows/${symbol}`, null, {
-    params: source ? { source } : {}
+    params: {
+      ...(source ? { source } : {}),
+      ...(options.largeTransferThresholdUsd
+        ? { largeTransferThresholdUsd: options.largeTransferThresholdUsd }
+        : {})
+    }
   });
 
   return response.data.data;
@@ -106,8 +124,15 @@ export async function refreshRecentCexFlowPipeline(symbol, options = {}) {
     force: options.forceValuation || false
   });
 
-  const cexFlowJob = await calculateCexFlows(symbol, transferSource);
-  const cexFlows = await getTokenCexFlows(symbol, calculatedSource);
+  const cexFlowJob = await calculateCexFlows(symbol, transferSource, {
+    largeTransferThresholdUsd: options.largeTransferThresholdUsd || 50000
+  });
+
+  const cexFlows = await getTokenCexFlows(symbol, {
+    source: calculatedSource,
+    range: options.range || '1m',
+    limit: 500
+  });
 
   return {
     ingestion,

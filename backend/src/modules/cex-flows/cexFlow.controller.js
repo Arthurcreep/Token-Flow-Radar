@@ -2,11 +2,21 @@ const cexFlowService = require('./cexFlow.service');
 
 async function getCexFlows(req, res) {
   const { symbol } = req.validated.params;
-  const { source, limit, offset } = req.validated.query;
+  const {
+    source,
+    range,
+    fromDate,
+    toDate,
+    limit,
+    offset
+  } = req.validated.query;
 
   const result = await cexFlowService.getCexFlows({
     symbol,
     source,
+    range,
+    fromDate,
+    toDate,
     limit,
     offset
   });

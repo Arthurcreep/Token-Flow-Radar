@@ -193,7 +193,9 @@ async function bulkCreateDailyFlows(rows = []) {
 
 function buildDailyFlowSqlWhere({
   tokenId,
-  source
+  source,
+  fromDate,
+  toDate
 }) {
   const clauses = ['cfd.token_id = :tokenId'];
 
@@ -201,23 +203,64 @@ function buildDailyFlowSqlWhere({
     clauses.push('cfd.source = :source');
   }
 
+  if (fromDate) {
+    clauses.push('cfd.date >= :fromDate');
+  }
+
+  if (toDate) {
+    clauses.push('cfd.date <= :toDate');
+  }
+
   return clauses.join(' AND ');
 }
 
-async function findDailyFlows({
+async function findLatestDailyFlowDate({
   tokenId,
-  source,
-  limit = 30,
-  offset = 0
+  source
 }) {
   const whereSql = buildDailyFlowSqlWhere({
     tokenId,
     source
   });
 
+  const rows = await CexFlowDaily.sequelize.query(
+    `
+      SELECT MAX(cfd.date)::text AS latest_date
+      FROM cex_flow_daily cfd
+      WHERE ${whereSql};
+    `,
+    {
+      type: QueryTypes.SELECT,
+      replacements: {
+        tokenId,
+        source
+      }
+    }
+  );
+
+  return rows[0]?.latest_date || null;
+}
+
+async function findDailyFlows({
+  tokenId,
+  source,
+  fromDate,
+  toDate,
+  limit = 500,
+  offset = 0
+}) {
+  const whereSql = buildDailyFlowSqlWhere({
+    tokenId,
+    source,
+    fromDate,
+    toDate
+  });
+
   const replacements = {
     tokenId,
     source,
+    fromDate,
+    toDate,
     limit,
     offset
   };
@@ -227,7 +270,7 @@ async function findDailyFlows({
       SELECT
         cfd.id,
         cfd.token_id,
-        cfd.date,
+        cfd.date::text AS date,
         cfd.cex_inflow,
         cfd.cex_outflow,
         cfd.cex_netflow,
@@ -243,7 +286,7 @@ async function findDailyFlows({
         COALESCE(cfd.large_netflow_usd, 0) AS large_netflow_usd,
         COALESCE(cfd.large_transfer_threshold_usd, 0) AS large_transfer_threshold_usd,
         cfd.source,
-        cfd.data_mode,
+        COALESCE(cfd.data_mode, 'unknown') AS data_mode,
         t.id AS token_ref_id,
         t.symbol AS token_symbol,
         t.name AS token_name
@@ -292,5 +335,6 @@ module.exports = {
   findTransfersForCexFlow,
   deleteDailyFlowsBySource,
   bulkCreateDailyFlows,
+  findLatestDailyFlowDate,
   findDailyFlows
 };

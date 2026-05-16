@@ -2,6 +2,15 @@ const cexFlowRepository = require('./cexFlow.repository');
 const NotFoundError = require('../../errors/NotFoundError');
 
 const DEFAULT_LARGE_TRANSFER_THRESHOLD_USD = 50000;
+const DEFAULT_FLOW_LIMIT = 500;
+
+const RANGE_CONFIG = {
+  '1d': { label: '1D', days: 1 },
+  '7d': { label: '7D', days: 7 },
+  '1m': { label: '1M', days: 30 },
+  '1y': { label: '1Y', days: 365 },
+  all: { label: 'ALL', days: null }
+};
 
 function toNumber(value) {
   if (value === null || value === undefined || value === '') return 0;
@@ -10,6 +19,20 @@ function toNumber(value) {
 
 function toDateKey(value) {
   return new Date(value).toISOString().slice(0, 10);
+}
+
+function formatDate(date) {
+  if (!date) return null;
+  if (typeof date === 'string') return date.slice(0, 10);
+
+  return date.toISOString().slice(0, 10);
+}
+
+function addDays(dateString, days) {
+  const date = new Date(`${dateString}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+
+  return formatDate(date);
 }
 
 function getAddressEntityId(address) {
@@ -182,6 +205,76 @@ function normalizeDailyRowForApi(row) {
   };
 }
 
+function buildRangeWindow({
+  range,
+  latestDataDate,
+  fromDate,
+  toDate
+}) {
+  if (fromDate || toDate) {
+    return {
+      selected: 'custom',
+      label: 'CUSTOM',
+      fromDate: fromDate || null,
+      toDate: toDate || latestDataDate || null,
+      latestDataDate: latestDataDate || null,
+      isAnchoredToLatestDataDate: false
+    };
+  }
+
+  const selectedRange = RANGE_CONFIG[range] ? range : '1m';
+  const config = RANGE_CONFIG[selectedRange];
+
+  if (!latestDataDate) {
+    return {
+      selected: selectedRange,
+      label: config.label,
+      fromDate: null,
+      toDate: null,
+      latestDataDate: null,
+      isAnchoredToLatestDataDate: true
+    };
+  }
+
+  if (!config.days) {
+    return {
+      selected: selectedRange,
+      label: config.label,
+      fromDate: null,
+      toDate: latestDataDate,
+      latestDataDate,
+      isAnchoredToLatestDataDate: true
+    };
+  }
+
+  return {
+    selected: selectedRange,
+    label: config.label,
+    fromDate: addDays(latestDataDate, -config.days + 1),
+    toDate: latestDataDate,
+    latestDataDate,
+    isAnchoredToLatestDataDate: true
+  };
+}
+
+function getActiveFlowWindow(items) {
+  if (!items.length) {
+    return {
+      fromDate: null,
+      toDate: null,
+      label: '—'
+    };
+  }
+
+  const sorted = [...items].sort((a, b) => a.date.localeCompare(b.date));
+
+  return {
+    fromDate: sorted[0].date,
+    toDate: sorted[sorted.length - 1].date,
+    label: `${sorted[0].date} → ${sorted[sorted.length - 1].date}`
+  };
+}
+
 async function calculateCexFlows({
   symbol,
   fromDate,
@@ -322,7 +415,10 @@ async function calculateCexFlows({
 async function getCexFlows({
   symbol,
   source,
-  limit = 30,
+  range = '1m',
+  fromDate,
+  toDate,
+  limit = DEFAULT_FLOW_LIMIT,
   offset = 0
 }) {
   const token = await cexFlowRepository.findTokenBySymbol(symbol);
@@ -333,15 +429,30 @@ async function getCexFlows({
     });
   }
 
+  const latestDataDate = await cexFlowRepository.findLatestDailyFlowDate({
+    tokenId: token.id,
+    source
+  });
+
+  const rangeInfo = buildRangeWindow({
+    range,
+    latestDataDate,
+    fromDate,
+    toDate
+  });
+
   const { rows, total } = await cexFlowRepository.findDailyFlows({
     tokenId: token.id,
     source,
+    fromDate: rangeInfo.fromDate,
+    toDate: rangeInfo.toDate,
     limit,
     offset
   });
 
   const items = rows.map(normalizeDailyRowForApi);
   const summary = buildSummary(items);
+  const activeFlowWindow = getActiveFlowWindow(items);
 
   summary.regimeHint = getRegimeHint(summary);
   summary.largeTransferThresholdUsd =
@@ -353,12 +464,23 @@ async function getCexFlows({
       items,
       source: source || 'all',
       dataMode: items.find((item) => item.dataMode)?.dataMode || 'unknown',
-      largeTransferThresholdUsd: summary.largeTransferThresholdUsd
+      largeTransferThresholdUsd: summary.largeTransferThresholdUsd,
+      range: {
+        ...rangeInfo,
+        calendarWindow: rangeInfo.fromDate && rangeInfo.toDate
+          ? `${rangeInfo.fromDate} → ${rangeInfo.toDate}`
+          : '—',
+        activeDays: items.length,
+        activeFlowWindow,
+        loadedRows: total
+      }
     },
     meta: {
       limit,
       offset,
-      total
+      total,
+      range: rangeInfo.selected,
+      source: source || 'all'
     }
   };
 }
