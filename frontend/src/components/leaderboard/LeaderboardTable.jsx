@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import {
@@ -7,6 +8,33 @@ import {
 
 import Badge from '../common/Badge';
 import Card from '../common/Card';
+
+const PROFILE_FILTERS = [
+  {
+    value: 'all',
+    label: 'All'
+  },
+  {
+    value: 'clean_supply_drain',
+    label: 'Clean supply drain'
+  },
+  {
+    value: 'speculative_recovery_candidate',
+    label: 'Speculative recovery'
+  },
+  {
+    value: 'mixed_flow',
+    label: 'Mixed flow'
+  },
+  {
+    value: 'unconfirmed_flow',
+    label: 'Unconfirmed'
+  },
+  {
+    value: 'sell_pressure_watch',
+    label: 'Sell pressure'
+  }
+];
 
 function getRegimeClass(regime) {
   if (regime === 'CEX_SUPPLY_DRAIN') return 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300';
@@ -117,6 +145,44 @@ function formatPrice(value) {
   return formatCompactUsd(numberValue);
 }
 
+function countByProfile(items, profileLabel) {
+  if (profileLabel === 'all') return items.length;
+
+  return items.filter((item) => item.analysisProfile?.profileLabel === profileLabel).length;
+}
+
+function ProfileFilters({
+  items,
+  selectedProfile,
+  onSelectProfile
+}) {
+  return (
+    <div className="mb-4 flex flex-wrap gap-2">
+      {PROFILE_FILTERS.map((filter) => {
+        const isActive = selectedProfile === filter.value;
+        const count = countByProfile(items, filter.value);
+
+        return (
+          <button
+            key={filter.value}
+            type="button"
+            onClick={() => onSelectProfile(filter.value)}
+            className={[
+              'rounded-full border px-3 py-2 text-xs font-bold transition',
+              isActive
+                ? 'border-cyan-400 bg-cyan-400/10 text-cyan-200'
+                : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-600 hover:text-slate-200'
+            ].join(' ')}
+          >
+            {filter.label}
+            <span className="ml-2 text-slate-500">{count}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function PriceContextCell({ priceContext }) {
   if (!priceContext) {
     return (
@@ -209,15 +275,29 @@ function ProfileCell({ analysisProfile }) {
 }
 
 export default function LeaderboardTable({ items = [], totalItems = 0, selectedFilter = 'all' }) {
+  const [selectedProfile, setSelectedProfile] = useState('all');
+
+  const filteredItems = useMemo(() => {
+    if (selectedProfile === 'all') return items;
+
+    return items.filter((item) => item.analysisProfile?.profileLabel === selectedProfile);
+  }, [items, selectedProfile]);
+
   return (
     <Card
       title="CEX Flow Leaderboard"
-      subtitle={`Showing ${items.length} of ${totalItems} tokens. Negative netflow means supply leaves known CEX wallets.`}
+      subtitle={`Showing ${filteredItems.length} of ${totalItems} tokens. Negative netflow means supply leaves known CEX wallets.`}
     >
       <div className="mb-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs leading-5 text-amber-100/80">
         <span className="font-bold text-amber-200">To ATH is not a forecast.</span>{' '}
         It only shows historical recovery distance from current price back to the previous all-time high.
       </div>
+
+      <ProfileFilters
+        items={items}
+        selectedProfile={selectedProfile}
+        onSelectProfile={setSelectedProfile}
+      />
 
       <div className="overflow-x-auto">
         <table className="min-w-full text-left text-sm">
@@ -237,7 +317,7 @@ export default function LeaderboardTable({ items = [], totalItems = 0, selectedF
           </thead>
 
           <tbody>
-            {items.map((item) => (
+            {filteredItems.map((item) => (
               <tr key={item.token.id} className="border-b border-slate-900/80 transition hover:bg-slate-900/60">
                 <td className="px-4 py-4">
                   <div>
@@ -304,10 +384,19 @@ export default function LeaderboardTable({ items = [], totalItems = 0, selectedF
         </table>
       </div>
 
-      {!items.length && (
+      {!filteredItems.length && (
         <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/60 p-8 text-center">
           <p className="font-semibold text-slate-300">No tokens match this filter.</p>
-          <p className="mt-2 text-sm text-slate-500">Current filter: {selectedFilter}. Try All or another range.</p>
+          <p className="mt-2 text-sm text-slate-500">
+            Current profile filter: {PROFILE_FILTERS.find((item) => item.value === selectedProfile)?.label || selectedProfile}.
+          </p>
+          <button
+            type="button"
+            onClick={() => setSelectedProfile('all')}
+            className="mt-4 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-xs font-bold text-cyan-200 transition hover:bg-cyan-500/20"
+          >
+            Reset profile filter
+          </button>
         </div>
       )}
     </Card>
