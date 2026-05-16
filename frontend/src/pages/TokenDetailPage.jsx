@@ -14,22 +14,23 @@ import DataModeBadge from '../components/data/DataModeBadge';
 import ErrorState from '../components/common/ErrorState';
 import LoadingState from '../components/common/LoadingState';
 import TokenHero from '../components/token/TokenHero';
-import CexFlowSummary from '../components/token/CexFlowSummary';
-import CexFlowChart from '../components/token/CexFlowChart';
 import CexFlowActorsPlaceholder from '../components/token/CexFlowActorsPlaceholder';
 import ScoreDecomposition from '../components/token/ScoreDecomposition';
 import HoldersTable from '../components/token/HoldersTable';
-import RealRecentCexFlowPanel from '../components/token/RealRecentCexFlowPanel';
+import RealRecentCexFlowPanel, { RANGE_OPTIONS } from '../components/token/RealRecentCexFlowPanel';
 import { useTranslation } from '../i18n/useTranslation';
 
 const RECENT_CEX_FLOW_SOURCE = 'calculated_from_etherscan_v2_recent_cex_address_tokentx';
+
+function getRangeOption(range) {
+  return RANGE_OPTIONS.find((item) => item.value === range) || RANGE_OPTIONS[2];
+}
 
 export default function TokenDetailPage() {
   const { symbol } = useParams();
   const { t } = useTranslation();
 
   const [overview, setOverview] = useState(null);
-  const [cexFlows, setCexFlows] = useState(null);
   const [recentCexFlows, setRecentCexFlows] = useState(null);
   const [holders, setHolders] = useState(null);
   const [signals, setSignals] = useState([]);
@@ -38,6 +39,7 @@ export default function TokenDetailPage() {
   const [refreshStatus, setRefreshStatus] = useState('idle');
   const [refreshMessage, setRefreshMessage] = useState('');
 
+  const [selectedRange, setSelectedRange] = useState('1m');
   const [recentRefreshStatus, setRecentRefreshStatus] = useState('idle');
   const [recentRefreshMessage, setRecentRefreshMessage] = useState('');
   const [recentValuation, setRecentValuation] = useState(null);
@@ -45,20 +47,17 @@ export default function TokenDetailPage() {
   async function loadTokenDashboard() {
     const [
       overviewData,
-      cexFlowData,
       recentCexFlowData,
       holderData,
       signalData
     ] = await Promise.all([
       getTokenOverview(symbol),
-      getTokenCexFlows(symbol).catch(() => null),
       getTokenCexFlows(symbol, RECENT_CEX_FLOW_SOURCE).catch(() => null),
       getTokenTopHolders(symbol).catch(() => null),
       getTokenSignals(symbol).catch(() => [])
     ]);
 
     setOverview(overviewData);
-    setCexFlows(cexFlowData);
     setRecentCexFlows(recentCexFlowData);
     setHolders(holderData);
     setSignals(signalData);
@@ -110,22 +109,26 @@ export default function TokenDetailPage() {
 
   async function handleRefreshRecentCexFlows() {
     try {
+      const rangeOption = getRangeOption(selectedRange);
+
       setRecentRefreshStatus('loading');
-      setRecentRefreshMessage('Запускаем recent ingestion → USD valuation → пересчет CEX flows...');
+      setRecentRefreshMessage(
+        `Запускаем диапазон ${rangeOption.label}: ingest → USD valuation → CEX flows...`
+      );
 
       const result = await refreshRecentCexFlowPipeline(symbol, {
-        blocksBack: 500000,
+        blocksBack: rangeOption.blocksBack,
         offset: 50,
-        maxPages: 2,
+        maxPages: selectedRange === '1y' ? 5 : 2,
         maxAddresses: 7,
-        valuationLimit: 1000
+        valuationLimit: selectedRange === '1y' ? 5000 : 1000
       });
 
       setRecentCexFlows(result.cexFlows);
       setRecentValuation(result.valuation);
       setRecentRefreshStatus('success');
       setRecentRefreshMessage(
-        `Готово: fetched=${result.ingestion.fetchedRaw}, inserted=${result.ingestion.inserted}, valued=${result.valuation.updated}, skipped=${result.ingestion.skippedDuplicates}`
+        `Готово: range=${rangeOption.label}, fetched=${result.ingestion.fetchedRaw}, inserted=${result.ingestion.inserted}, valued=${result.valuation.updated}, skipped=${result.ingestion.skippedDuplicates}`
       );
 
       setTimeout(() => {
@@ -172,19 +175,17 @@ export default function TokenDetailPage() {
       <RealRecentCexFlowPanel
         cexFlows={recentCexFlows}
         valuation={recentValuation}
+        selectedRange={selectedRange}
+        onRangeChange={setSelectedRange}
         refreshStatus={recentRefreshStatus}
         refreshMessage={recentRefreshMessage}
         onRefresh={handleRefreshRecentCexFlows}
       />
 
-      <CexFlowSummary overview={overview} />
-
-      <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <CexFlowChart cexFlows={cexFlows} />
+      <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <ScoreDecomposition overview={overview} topSignal={topSignal} />
+        <CexFlowActorsPlaceholder />
       </section>
-
-      <CexFlowActorsPlaceholder />
 
       <HoldersTable holders={holders} />
     </div>

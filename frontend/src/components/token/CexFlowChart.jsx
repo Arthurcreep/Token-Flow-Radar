@@ -10,7 +10,6 @@ import {
   YAxis
 } from 'recharts';
 
-import { useTranslation } from '../../i18n/useTranslation';
 import { formatNumber } from '../../utils/format';
 import Card from '../common/Card';
 import EmptyState from '../common/EmptyState';
@@ -104,20 +103,26 @@ function CustomTooltip({ active, payload, label }) {
   );
 }
 
-export default function CexFlowChart({ cexFlows }) {
-  const { t } = useTranslation();
-
-  const cexChartData = cexFlows?.items
-    ? [...cexFlows.items].reverse().map((item) => ({
+function toChartData(items = []) {
+  return [...items]
+    .sort((a, b) => new Date(`${a.date}T00:00:00.000Z`) - new Date(`${b.date}T00:00:00.000Z`))
+    .map((item) => ({
       date: item.date.slice(5),
       netflow: Number(item.cexNetflow || 0)
-    }))
-    : [];
+    }));
+}
+
+export default function CexFlowChart({
+  cexFlows,
+  title = 'Структура CEX flows',
+  subtitle = 'Дневной CEX netflow. Положительные значения означают завод токенов на CEX и возможное давление продажи. Отрицательные значения означают вывод токенов с CEX и снижение доступного supply.'
+}) {
+  const cexChartData = toChartData(cexFlows?.items || []);
 
   return (
     <Card
-      title={t('token.cexFlowStructure')}
-      subtitle="Дневной CEX netflow. Положительные значения означают завод токенов на CEX и возможное давление продажи. Отрицательные значения означают вывод токенов с CEX и снижение доступного supply."
+      title={title}
+      subtitle={subtitle}
       right={
         <div className="flex flex-wrap items-center gap-3 text-xs">
           <div className="flex items-center gap-2 text-red-300">
@@ -183,8 +188,8 @@ export default function CexFlowChart({ cexFlows }) {
         </div>
       ) : (
         <EmptyState
-          title={t('common.noCexFlows')}
-          description={t('token.noCexFlowsDescription')}
+          title="Нет CEX flows для выбранного диапазона"
+          description="Выбери другой диапазон или обнови real recent CEX flows."
         />
       )}
     </Card>
