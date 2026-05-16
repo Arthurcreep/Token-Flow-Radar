@@ -28,6 +28,38 @@ function getStrengthClass(strength) {
   return 'border-slate-700 bg-slate-900 text-slate-500';
 }
 
+function getProfileClass(profileLabel) {
+  if (profileLabel === 'clean_supply_drain') {
+    return 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300';
+  }
+
+  if (profileLabel === 'speculative_recovery_candidate') {
+    return 'border-amber-500/40 bg-amber-500/10 text-amber-300';
+  }
+
+  if (profileLabel === 'mixed_flow') {
+    return 'border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-300';
+  }
+
+  if (profileLabel === 'sell_pressure_watch') {
+    return 'border-red-500/40 bg-red-500/10 text-red-300';
+  }
+
+  if (profileLabel === 'unconfirmed_flow' || profileLabel === 'weak_signal') {
+    return 'border-slate-600 bg-slate-800 text-slate-300';
+  }
+
+  return 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300';
+}
+
+function getRecoveryClass(recoveryContext) {
+  if (recoveryContext === 'extreme') return 'text-red-300';
+  if (recoveryContext === 'high') return 'text-amber-300';
+  if (recoveryContext === 'medium') return 'text-cyan-300';
+  if (recoveryContext === 'low') return 'text-slate-300';
+  return 'text-slate-500';
+}
+
 function getSignedUsdClass(value) {
   const numberValue = Number(value || 0);
   if (numberValue < 0) return 'text-emerald-300';
@@ -116,6 +148,66 @@ function PriceContextCell({ priceContext }) {
   );
 }
 
+function RiskFlags({ flags = [] }) {
+  if (!flags.length) {
+    return (
+      <p className="mt-2 text-xs text-emerald-300">
+        no major flags
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-2 flex max-w-[260px] flex-wrap gap-1">
+      {flags.slice(0, 3).map((flag) => (
+        <span
+          key={flag}
+          className="rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-semibold text-slate-400"
+        >
+          {normalizeLabel(flag)}
+        </span>
+      ))}
+
+      {flags.length > 3 && (
+        <span className="rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-semibold text-slate-500">
+          +{flags.length - 3}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function ProfileCell({ analysisProfile }) {
+  if (!analysisProfile) {
+    return (
+      <div>
+        <p className="font-semibold text-slate-500">No profile</p>
+        <p className="mt-1 text-xs text-slate-600">Update backend profile</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-w-[260px]">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge className={getProfileClass(analysisProfile.profileLabel)}>
+          {normalizeLabel(analysisProfile.profileLabel)}
+        </Badge>
+
+        <span className={['text-xs font-bold', getRecoveryClass(analysisProfile.recoveryContext)].join(' ')}>
+          {normalizeLabel(analysisProfile.recoveryContext)}
+        </span>
+      </div>
+
+      <p className="mt-2 text-xs leading-5 text-slate-400">
+        {analysisProfile.interpretation}
+      </p>
+
+      <RiskFlags flags={analysisProfile.riskFlags || []} />
+    </div>
+  );
+}
+
 export default function LeaderboardTable({ items = [], totalItems = 0, selectedFilter = 'all' }) {
   return (
     <Card
@@ -132,6 +224,7 @@ export default function LeaderboardTable({ items = [], totalItems = 0, selectedF
           <thead>
             <tr className="border-b border-slate-800 text-xs uppercase tracking-[0.16em] text-slate-500">
               <th className="px-4 py-3">Token</th>
+              <th className="px-4 py-3">Profile</th>
               <th className="px-4 py-3">Regime</th>
               <th className="px-4 py-3">Netflow USD</th>
               <th className="px-4 py-3">Large Netflow</th>
@@ -153,6 +246,10 @@ export default function LeaderboardTable({ items = [], totalItems = 0, selectedF
                     </Link>
                     <p className="mt-1 text-xs text-slate-500">{item.token.name}</p>
                   </div>
+                </td>
+
+                <td className="px-4 py-4">
+                  <ProfileCell analysisProfile={item.analysisProfile} />
                 </td>
 
                 <td className="px-4 py-4">
