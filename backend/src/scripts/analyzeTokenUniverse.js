@@ -75,7 +75,9 @@ function getConfig() {
     maxAddresses: parseNumberEnv('MAX_ADDRESSES', 7),
     valuationLimit: parseNumberEnv('VALUATION_LIMIT', 1000),
     largeTransferThresholdUsd: parseNumberEnv('LARGE_TRANSFER_THRESHOLD_USD', 50000),
-    delayMs: parseNumberEnv('UNIVERSE_ANALYZE_DELAY_MS', 2500)
+    delayMs: parseNumberEnv('UNIVERSE_ANALYZE_DELAY_MS', 2500),
+    priceContextRetries: parseNumberEnv('PRICE_CONTEXT_RETRIES', 2),
+    priceContextRetryDelayMs: parseNumberEnv('PRICE_CONTEXT_RETRY_DELAY_MS', 5000)
   };
 }
 
@@ -97,6 +99,7 @@ async function requestJson(url, options = {}) {
 
     const error = new Error(message);
     error.code = code;
+    error.statusCode = response.status;
     error.details = payload?.error?.details || null;
     error.payload = payload;
 
@@ -114,6 +117,35 @@ async function post(url) {
 
 async function get(url) {
   return requestJson(url);
+}
+
+async function postWithRetry(url, {
+  retries,
+  retryDelayMs,
+  label
+}) {
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await post(url);
+    } catch (error) {
+      lastError = error;
+
+      const isLastAttempt = attempt >= retries;
+      const isRateLimit = error.statusCode === 429 || error.details?.status === 429 || error.code?.includes('COINGECKO');
+
+      if (isLastAttempt || !isRateLimit) {
+        throw error;
+      }
+
+      console.log(`  ${label} retry ${attempt + 1}/${retries} after ${retryDelayMs}ms: ${error.code || error.message}`);
+
+      await sleep(retryDelayMs);
+    }
+  }
+
+  throw lastError;
 }
 
 async function runIngest(symbol, config) {
@@ -134,10 +166,14 @@ async function runCexFlowCalculation(symbol, config) {
   return post(url);
 }
 
-async function runPriceContextUpdate(symbol) {
+async function runPriceContextUpdate(symbol, config) {
   const url = `${API_BASE_URL}/price-context/update?symbols=${encodeURIComponent(symbol)}`;
 
-  return post(url);
+  return postWithRetry(url, {
+    retries: config.priceContextRetries,
+    retryDelayMs: config.priceContextRetryDelayMs,
+    label: `${symbol} price_context`
+  });
 }
 
 async function verifyCexFlows(symbol, config) {
@@ -150,52 +186,71 @@ function extractData(payload) {
   return payload?.data || {};
 }
 
+function makeStepError(error) {
+  return {
+    code: error.code || 'STEP_FAILED',
+    message: error.message,
+    details: error.details || null,
+    statusCode: error.statusCode || null
+  };
+}
+
 async function analyzeOneSymbol(symbol, config) {
   const startedAt = Date.now();
   const steps = [];
+  const warnings = [];
 
   try {
     console.log(`\n=== ${symbol} ===`);
 
     console.log('→ ingest recent transfers');
     const ingestPayload = await runIngest(symbol, config);
-    const ingest = extractData(ingestPayload);
-
     steps.push({
       step: 'ingest',
       status: 'success',
-      data: ingest
+      data: extractData(ingestPayload)
     });
 
     console.log('→ value transfers');
     const valuationPayload = await runValuation(symbol, config);
-    const valuation = extractData(valuationPayload);
-
     steps.push({
       step: 'valuation',
       status: 'success',
-      data: valuation
+      data: extractData(valuationPayload)
     });
 
     console.log('→ calculate CEX flows');
     const cexFlowsPayload = await runCexFlowCalculation(symbol, config);
-    const cexFlows = extractData(cexFlowsPayload);
-
     steps.push({
       step: 'cex_flows',
       status: 'success',
-      data: cexFlows
+      data: extractData(cexFlowsPayload)
     });
 
     console.log('→ update price context');
-    const pricePayload = await runPriceContextUpdate(symbol);
-    const priceContext = extractData(pricePayload);
+    try {
+      const pricePayload = await runPriceContextUpdate(symbol, config);
+      steps.push({
+        step: 'price_context',
+        status: 'success',
+        data: extractData(pricePayload)
+      });
+    } catch (error) {
+      const stepError = makeStepError(error);
 
-    steps.push({
-      step: 'price_context',
-      status: 'success',
-      data: priceContext
-    });
+      warnings.push({
+        step: 'price_context',
+        ...stepError
+      });
+
+      steps.push({
+        step: 'price_context',
+        status: 'warning',
+        error: stepError
+      });
+
+      console.log(`  warning price_context code=${stepError.code} message=${stepError.message}`);
+    }
 
     console.log('→ verify cex flows');
     const verifyPayload = await verifyCexFlows(symbol, config);
@@ -210,13 +265,16 @@ async function analyzeOneSymbol(symbol, config) {
       }
     });
 
-    console.log(`ok ${symbol}`);
+    const status = warnings.length ? 'partial_success' : 'success';
+
+    console.log(`${status === 'success' ? 'ok' : 'partial'} ${symbol}`);
 
     return {
       symbol,
-      status: 'success',
+      status,
       durationMs: Date.now() - startedAt,
       cexSummary: verify.summary || null,
+      warnings,
       steps
     };
   } catch (error) {
@@ -227,11 +285,8 @@ async function analyzeOneSymbol(symbol, config) {
       status: 'failed',
       durationMs: Date.now() - startedAt,
       steps,
-      error: {
-        code: error.code || 'ANALYZE_FAILED',
-        message: error.message,
-        details: error.details || null
-      }
+      warnings,
+      error: makeStepError(error)
     };
   }
 }
@@ -252,6 +307,8 @@ async function main() {
   console.log(`valuationLimit=${config.valuationLimit}`);
   console.log(`largeTransferThresholdUsd=${config.largeTransferThresholdUsd}`);
   console.log(`delayMs=${config.delayMs}`);
+  console.log(`priceContextRetries=${config.priceContextRetries}`);
+  console.log(`priceContextRetryDelayMs=${config.priceContextRetryDelayMs}`);
 
   const results = [];
 
@@ -270,6 +327,7 @@ async function main() {
   const summary = {
     total: results.length,
     success: results.filter((item) => item.status === 'success').length,
+    partialSuccess: results.filter((item) => item.status === 'partial_success').length,
     failed: results.filter((item) => item.status === 'failed').length
   };
 
@@ -284,15 +342,16 @@ async function main() {
       durationMs: item.durationMs,
       netflowUsd: item.cexSummary?.cexNetflowUsd ?? '',
       regimeHint: item.cexSummary?.regimeHint ?? '',
+      warnings: item.warnings?.length || 0,
       error: item.error?.code || ''
     }))
   );
 
-  const failed = results.filter((item) => item.status === 'failed');
+  const incomplete = results.filter((item) => item.status !== 'success');
 
-  if (failed.length) {
-    console.log('\n=== Failed Details ===');
-    console.dir(failed, {
+  if (incomplete.length) {
+    console.log('\n=== Incomplete Details ===');
+    console.dir(incomplete, {
       depth: 6
     });
   }
