@@ -13,6 +13,7 @@ const holderRoutes = require('./modules/holders/holder.routes');
 const metricRoutes = require('./modules/metrics/metric.routes');
 const signalRoutes = require('./modules/signals/signal.routes');
 const marketLeaderboardRoutes = require('./modules/markets/marketLeaderboard.routes');
+const tokenImportRoutes = require('./modules/token-import/tokenImport.routes');
 
 const notFoundHandler = require('./middlewares/notFoundHandler');
 const errorHandler = require('./middlewares/errorHandler');
@@ -32,16 +33,17 @@ app.get('/favicon.ico', (req, res) => {
   res.status(204).end();
 });
 
-app.use('/api/health', healthRoutes);
-app.use('/api/tokens', tokenRoutes);
-app.use('/api/tokens', cexFlowRoutes);
-app.use('/api/labels', labelRoutes);
-app.use('/api/transfers', transferRoutes);
-app.use('/api', cexFlowRoutes);
-app.use('/api/jobs', jobRoutes);
 app.use('/api', holderRoutes);
 app.use('/api', metricRoutes);
 app.use('/api', signalRoutes);
+app.use('/api', cexFlowRoutes);
+app.use('/api/tokens', tokenRoutes);
+app.use('/api/tokens', cexFlowRoutes);
+app.use('/api/tokens', tokenImportRoutes);
+app.use('/api/health', healthRoutes);
+app.use('/api/labels', labelRoutes);
+app.use('/api/transfers', transferRoutes);
+app.use('/api/jobs', jobRoutes);
 app.use('/api/markets', marketLeaderboardRoutes);
 
 app.use(notFoundHandler);
