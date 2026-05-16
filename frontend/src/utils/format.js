@@ -20,6 +20,53 @@ export function formatUsd(value, digits = 2) {
   }).format(Number(value));
 }
 
+export function formatCompactNumber(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return '—';
+  }
+
+  const numberValue = Number(value);
+  const absValue = Math.abs(numberValue);
+
+  if (absValue >= 1_000_000_000) {
+    return `${(numberValue / 1_000_000_000).toFixed(2)}B`;
+  }
+
+  if (absValue >= 1_000_000) {
+    return `${(numberValue / 1_000_000).toFixed(2)}M`;
+  }
+
+  if (absValue >= 1_000) {
+    return `${(numberValue / 1_000).toFixed(1)}K`;
+  }
+
+  return formatNumber(numberValue);
+}
+
+export function formatCompactUsd(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return '—';
+  }
+
+  const numberValue = Number(value);
+  const absValue = Math.abs(numberValue);
+  const sign = numberValue < 0 ? '-' : '';
+
+  if (absValue >= 1_000_000_000) {
+    return `${sign}$${(absValue / 1_000_000_000).toFixed(2)}B`;
+  }
+
+  if (absValue >= 1_000_000) {
+    return `${sign}$${(absValue / 1_000_000).toFixed(2)}M`;
+  }
+
+  if (absValue >= 1_000) {
+    return `${sign}$${(absValue / 1_000).toFixed(1)}K`;
+  }
+
+  return formatUsd(numberValue);
+}
+
 export function formatPercent(value, digits = 0) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
     return '—';
@@ -48,13 +95,22 @@ export function shortAddress(address) {
 }
 
 export function getSignedClass(value) {
-  const numberValue = Number(String(value).replaceAll(',', ''));
+  const numberValue = Number(String(value).replaceAll(',', '').replace('$', ''));
 
   if (Number.isNaN(numberValue)) return 'text-white';
   if (numberValue > 0) return 'text-emerald-300';
   if (numberValue < 0) return 'text-red-300';
 
   return 'text-white';
+}
+
+export function getNetflowMarketClass(value) {
+  const numberValue = Number(value || 0);
+
+  if (numberValue > 0) return 'text-red-300';
+  if (numberValue < 0) return 'text-emerald-300';
+
+  return 'text-slate-300';
 }
 
 export function getRegimeStyles(regime) {

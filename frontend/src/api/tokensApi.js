@@ -52,6 +52,18 @@ export async function ingestRecentTokenTransfers(symbol, options = {}) {
   return response.data.data;
 }
 
+export async function valueTokenTransfers(symbol, options = {}) {
+  const response = await apiClient.post(`/jobs/value-transfers/${symbol}`, null, {
+    params: {
+      source: options.source,
+      limit: options.limit || 1000,
+      force: options.force || false
+    }
+  });
+
+  return response.data.data;
+}
+
 export async function calculateCexFlows(symbol, source) {
   const response = await apiClient.post(`/jobs/calculate-cex-flows/${symbol}`, null, {
     params: source ? { source } : {}
@@ -87,11 +99,19 @@ export async function refreshRecentCexFlowPipeline(symbol, options = {}) {
   const calculatedSource = 'calculated_from_etherscan_v2_recent_cex_address_tokentx';
 
   const ingestion = await ingestRecentTokenTransfers(symbol, options);
+
+  const valuation = await valueTokenTransfers(symbol, {
+    source: transferSource,
+    limit: options.valuationLimit || 1000,
+    force: options.forceValuation || false
+  });
+
   const cexFlowJob = await calculateCexFlows(symbol, transferSource);
   const cexFlows = await getTokenCexFlows(symbol, calculatedSource);
 
   return {
     ingestion,
+    valuation,
     cexFlowJob,
     cexFlows,
     transferSource,

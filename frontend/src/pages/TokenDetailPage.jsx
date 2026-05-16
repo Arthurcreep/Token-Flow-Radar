@@ -40,6 +40,7 @@ export default function TokenDetailPage() {
 
   const [recentRefreshStatus, setRecentRefreshStatus] = useState('idle');
   const [recentRefreshMessage, setRecentRefreshMessage] = useState('');
+  const [recentValuation, setRecentValuation] = useState(null);
 
   async function loadTokenDashboard() {
     const [
@@ -110,25 +111,27 @@ export default function TokenDetailPage() {
   async function handleRefreshRecentCexFlows() {
     try {
       setRecentRefreshStatus('loading');
-      setRecentRefreshMessage('Запускаем recent ingestion и пересчет CEX flows...');
+      setRecentRefreshMessage('Запускаем recent ingestion → USD valuation → пересчет CEX flows...');
 
       const result = await refreshRecentCexFlowPipeline(symbol, {
         blocksBack: 500000,
         offset: 50,
         maxPages: 2,
-        maxAddresses: 7
+        maxAddresses: 7,
+        valuationLimit: 1000
       });
 
       setRecentCexFlows(result.cexFlows);
+      setRecentValuation(result.valuation);
       setRecentRefreshStatus('success');
       setRecentRefreshMessage(
-        `Готово: fetched=${result.ingestion.fetchedRaw}, inserted=${result.ingestion.inserted}, skipped=${result.ingestion.skippedDuplicates}`
+        `Готово: fetched=${result.ingestion.fetchedRaw}, inserted=${result.ingestion.inserted}, valued=${result.valuation.updated}, skipped=${result.ingestion.skippedDuplicates}`
       );
 
       setTimeout(() => {
         setRecentRefreshStatus('idle');
         setRecentRefreshMessage('');
-      }, 4000);
+      }, 5000);
     } catch (error) {
       setRecentRefreshStatus('error');
       setRecentRefreshMessage(
@@ -168,6 +171,7 @@ export default function TokenDetailPage() {
 
       <RealRecentCexFlowPanel
         cexFlows={recentCexFlows}
+        valuation={recentValuation}
         refreshStatus={recentRefreshStatus}
         refreshMessage={recentRefreshMessage}
         onRefresh={handleRefreshRecentCexFlows}

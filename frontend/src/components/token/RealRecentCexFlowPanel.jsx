@@ -1,6 +1,11 @@
 import { useMemo } from 'react';
 
-import { formatNumber } from '../../utils/format';
+import {
+  formatCompactUsd,
+  formatNumber,
+  getNetflowMarketClass
+} from '../../utils/format';
+
 import Card from '../common/Card';
 import MetricCard from '../common/MetricCard';
 import Badge from '../common/Badge';
@@ -10,15 +15,15 @@ const labels = {
   ru: {
     title: 'Real Recent CEX Flows',
     subtitle:
-      'Отдельный real-data слой: свежие transfers с известных CEX-кошельков. Это не полный accumulation score, а только CEX-flow сигнал.',
-    refresh: 'Обновить real recent CEX flows',
-    refreshing: 'Обновляем recent CEX flows...',
-    success: 'Real recent CEX flows обновлены.',
-    failed: 'Не удалось обновить real recent CEX flows.',
+      'Отдельный real-data слой: свежие transfers с известных CEX-кошельков. Теперь с USD valuation через CoinGecko.',
+    refresh: 'Обновить real recent CEX flows + USD',
+    refreshing: 'Обновляем recent CEX flows и USD...',
     netflow: 'Netflow',
     inflow: 'Inflow на CEX',
     outflow: 'Outflow с CEX',
     txCount: 'Tx count',
+    usd: 'USD',
+    uni: 'UNI',
     inflowHint: 'Завод на CEX = возможное давление продажи',
     outflowHint: 'Вывод с CEX = supply drain / снижение доступного supply',
     netflowHintPositive: 'CEX balance растет: возможный sell pressure',
@@ -26,25 +31,29 @@ const labels = {
     netflowHintNeutral: 'Нет явного перекоса',
     noData: 'Real recent CEX flows пока не рассчитаны.',
     noDataDescription:
-      'Нажми кнопку обновления или запусти backend jobs: ingest-recent-transfers + calculate-cex-flows.',
+      'Нажми кнопку обновления или запусти backend jobs: ingest-recent-transfers + value-transfers + calculate-cex-flows.',
     source: 'Источник',
     dataMode: 'Режим',
     regimeHint: 'Подсказка режима',
     rows: 'Дней',
-    processed: 'Обработано'
+    valuation: 'Valuation',
+    price: 'Цена',
+    updated: 'Обновлено',
+    warning:
+      'USD valuation использует текущую цену CoinGecko. Для recent flows это нормально, но это не историческая бухгалтерия.'
   },
   en: {
     title: 'Real Recent CEX Flows',
     subtitle:
-      'Separate real-data layer: recent transfers from known CEX wallets. This is not a full accumulation score; it is only a CEX-flow signal.',
-    refresh: 'Refresh real recent CEX flows',
-    refreshing: 'Refreshing recent CEX flows...',
-    success: 'Real recent CEX flows refreshed.',
-    failed: 'Failed to refresh real recent CEX flows.',
+      'Separate real-data layer: recent transfers from known CEX wallets. Now with USD valuation via CoinGecko.',
+    refresh: 'Refresh real recent CEX flows + USD',
+    refreshing: 'Refreshing recent CEX flows and USD...',
     netflow: 'Netflow',
     inflow: 'CEX Inflow',
     outflow: 'CEX Outflow',
     txCount: 'Tx count',
+    usd: 'USD',
+    uni: 'UNI',
     inflowHint: 'CEX inflow = possible sell pressure',
     outflowHint: 'CEX outflow = supply drain / lower available supply',
     netflowHintPositive: 'CEX balance is rising: possible sell pressure',
@@ -52,12 +61,16 @@ const labels = {
     netflowHintNeutral: 'No clear imbalance',
     noData: 'Real recent CEX flows are not calculated yet.',
     noDataDescription:
-      'Press refresh or run backend jobs: ingest-recent-transfers + calculate-cex-flows.',
+      'Press refresh or run backend jobs: ingest-recent-transfers + value-transfers + calculate-cex-flows.',
     source: 'Source',
     dataMode: 'Mode',
     regimeHint: 'Regime hint',
     rows: 'Days',
-    processed: 'Processed'
+    valuation: 'Valuation',
+    price: 'Price',
+    updated: 'Updated',
+    warning:
+      'USD valuation uses current CoinGecko price. Good enough for recent flows, but not precise historical accounting.'
   }
 };
 
@@ -91,10 +104,24 @@ function getNetflowBadgeClass(value) {
   return 'border-slate-700 bg-slate-800 text-slate-300';
 }
 
+function FlowValue({ tokenValue, usdValue, signed = false }) {
+  return (
+    <div>
+      <p className={['text-2xl font-black', signed ? getNetflowMarketClass(tokenValue) : 'text-white'].join(' ')}>
+        {formatNumber(tokenValue)}
+      </p>
+      <p className={['mt-1 text-sm font-semibold', signed ? getNetflowMarketClass(usdValue) : 'text-slate-400'].join(' ')}>
+        {formatCompactUsd(usdValue)}
+      </p>
+    </div>
+  );
+}
+
 export default function RealRecentCexFlowPanel({
   cexFlows,
   refreshStatus,
   refreshMessage,
+  valuation,
   onRefresh
 }) {
   const language = getLanguage();
@@ -141,10 +168,15 @@ export default function RealRecentCexFlowPanel({
           <div className="space-y-5">
             <div className="grid gap-4 lg:grid-cols-4">
               <MetricCard
-                label={dictionary.netflow}
-                value={formatNumber(summary.cexNetflow)}
+                label={`${dictionary.netflow} (${dictionary.uni} / ${dictionary.usd})`}
+                value={
+                  <FlowValue
+                    tokenValue={summary.cexNetflow}
+                    usdValue={summary.cexNetflowUsd}
+                    signed
+                  />
+                }
                 hint={getNetflowHint(summary.cexNetflow, dictionary)}
-                signed
                 right={
                   <Badge className={getNetflowBadgeClass(summary.cexNetflow)}>
                     {summary.regimeHint || 'UNKNOWN'}
@@ -153,14 +185,24 @@ export default function RealRecentCexFlowPanel({
               />
 
               <MetricCard
-                label={dictionary.inflow}
-                value={formatNumber(summary.cexInflow)}
+                label={`${dictionary.inflow} (${dictionary.uni} / ${dictionary.usd})`}
+                value={
+                  <FlowValue
+                    tokenValue={summary.cexInflow}
+                    usdValue={summary.cexInflowUsd}
+                  />
+                }
                 hint={dictionary.inflowHint}
               />
 
               <MetricCard
-                label={dictionary.outflow}
-                value={formatNumber(summary.cexOutflow)}
+                label={`${dictionary.outflow} (${dictionary.uni} / ${dictionary.usd})`}
+                value={
+                  <FlowValue
+                    tokenValue={summary.cexOutflow}
+                    usdValue={summary.cexOutflowUsd}
+                  />
+                }
                 hint={dictionary.outflowHint}
               />
 
@@ -170,6 +212,43 @@ export default function RealRecentCexFlowPanel({
                 hint={`${dictionary.rows}: ${cexFlows?.items?.length || 0}`}
               />
             </div>
+
+            {valuation && (
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+                <div className="grid gap-3 text-sm md:grid-cols-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300/70">
+                      {dictionary.valuation}
+                    </p>
+                    <p className="mt-2 font-semibold text-emerald-100">
+                      {valuation.provider || 'coingecko'} · {valuation.priceMode || 'current_price'}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300/70">
+                      {dictionary.price}
+                    </p>
+                    <p className="mt-2 font-semibold text-emerald-100">
+                      {formatCompactUsd(valuation.priceUsd)}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300/70">
+                      {dictionary.updated}
+                    </p>
+                    <p className="mt-2 font-semibold text-emerald-100">
+                      {formatNumber(valuation.updated || 0, 0)} transfers
+                    </p>
+                  </div>
+                </div>
+
+                <p className="mt-3 text-xs leading-5 text-emerald-100/65">
+                  {dictionary.warning}
+                </p>
+              </div>
+            )}
 
             <div className="grid gap-3 text-xs text-slate-500 lg:grid-cols-3">
               <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
