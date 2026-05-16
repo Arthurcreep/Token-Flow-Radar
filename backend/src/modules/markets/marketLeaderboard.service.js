@@ -172,11 +172,270 @@ function normalizePriceContext(row) {
   };
 }
 
+function getRecoveryContext(priceContext) {
+  if (!priceContext) return 'unknown';
+
+  const drawdown = toNumber(priceContext.drawdownFromAthPct);
+  const upside = toNumber(priceContext.upsideToAthPct);
+
+  if (drawdown <= -97 || upside >= 3000) {
+    return 'extreme';
+  }
+
+  if (drawdown <= -90 || upside >= 1000) {
+    return 'high';
+  }
+
+  if (drawdown <= -75 || upside >= 300) {
+    return 'medium';
+  }
+
+  if (drawdown < 0 || upside > 0) {
+    return 'low';
+  }
+
+  return 'none';
+}
+
+function getFlowSignal({
+  regimeHint,
+  largeFlowHint,
+  strength
+}) {
+  if (regimeHint === 'CEX_SUPPLY_DRAIN' && largeFlowHint === 'LARGE_SUPPLY_DRAIN') {
+    if (['very_strong', 'strong'].includes(strength)) {
+      return 'strong_supply_drain';
+    }
+
+    if (strength === 'moderate') {
+      return 'moderate_supply_drain';
+    }
+
+    return 'weak_supply_drain';
+  }
+
+  if (regimeHint === 'CEX_SELL_PRESSURE' && largeFlowHint === 'LARGE_SELL_PRESSURE') {
+    if (['very_strong', 'strong'].includes(strength)) {
+      return 'strong_sell_pressure';
+    }
+
+    if (strength === 'moderate') {
+      return 'moderate_sell_pressure';
+    }
+
+    return 'weak_sell_pressure';
+  }
+
+  if (regimeHint === 'CEX_SUPPLY_DRAIN' && largeFlowHint === 'LARGE_SELL_PRESSURE') {
+    return 'mixed_supply_drain_with_large_sell_pressure';
+  }
+
+  if (regimeHint === 'CEX_SELL_PRESSURE' && largeFlowHint === 'LARGE_SUPPLY_DRAIN') {
+    return 'mixed_sell_pressure_with_large_supply_drain';
+  }
+
+  if (regimeHint === 'CEX_SUPPLY_DRAIN' && largeFlowHint === 'NO_LARGE_FLOW') {
+    return 'unconfirmed_supply_drain';
+  }
+
+  if (regimeHint === 'CEX_SELL_PRESSURE' && largeFlowHint === 'NO_LARGE_FLOW') {
+    return 'unconfirmed_sell_pressure';
+  }
+
+  return 'neutral';
+}
+
+function buildRiskFlags({
+  regimeHint,
+  largeFlowHint,
+  strength,
+  priceContext,
+  activeDays,
+  cexNetflowUsd,
+  largeNetflowUsd
+}) {
+  const flags = [];
+  const drawdown = priceContext ? toNumber(priceContext.drawdownFromAthPct) : null;
+  const upside = priceContext ? toNumber(priceContext.upsideToAthPct) : null;
+
+  if (regimeHint === 'CEX_SUPPLY_DRAIN' && largeFlowHint === 'LARGE_SELL_PRESSURE') {
+    flags.push('large_layer_conflict');
+  }
+
+  if (regimeHint === 'CEX_SELL_PRESSURE' && largeFlowHint === 'LARGE_SUPPLY_DRAIN') {
+    flags.push('large_layer_conflict');
+  }
+
+  if (largeFlowHint === 'NO_LARGE_FLOW') {
+    flags.push('no_large_flow_confirmation');
+  }
+
+  if (strength === 'weak') {
+    flags.push('weak_flow');
+  }
+
+  if (activeDays <= 2) {
+    flags.push('thin_active_days');
+  }
+
+  if (drawdown !== null && drawdown <= -97) {
+    flags.push('extreme_ath_drawdown');
+  } else if (drawdown !== null && drawdown <= -90) {
+    flags.push('deep_ath_drawdown');
+  }
+
+  if (upside !== null && upside >= 3000) {
+    flags.push('extreme_recovery_distance');
+  }
+
+  if (Math.abs(toNumber(cexNetflowUsd)) < 100_000) {
+    flags.push('low_usd_flow');
+  }
+
+  if (Math.abs(toNumber(largeNetflowUsd)) === 0) {
+    flags.push('zero_large_netflow');
+  }
+
+  return flags;
+}
+
+function getProfileLabel({
+  flowSignal,
+  recoveryContext,
+  riskFlags
+}) {
+  if (flowSignal === 'strong_supply_drain' && !riskFlags.includes('large_layer_conflict')) {
+    return 'clean_supply_drain';
+  }
+
+  if (flowSignal === 'moderate_supply_drain' && ['high', 'extreme'].includes(recoveryContext)) {
+    return 'speculative_recovery_candidate';
+  }
+
+  if (flowSignal.includes('mixed')) {
+    return 'mixed_flow';
+  }
+
+  if (flowSignal.includes('sell_pressure')) {
+    return 'sell_pressure_watch';
+  }
+
+  if (flowSignal.includes('unconfirmed')) {
+    return 'unconfirmed_flow';
+  }
+
+  if (riskFlags.includes('weak_flow')) {
+    return 'weak_signal';
+  }
+
+  return 'watchlist_candidate';
+}
+
+function getInterpretation({
+  tokenSymbol,
+  flowSignal,
+  recoveryContext,
+  riskFlags
+}) {
+  if (flowSignal === 'strong_supply_drain' && !riskFlags.includes('large_layer_conflict')) {
+    return `${tokenSymbol} shows clean CEX supply drain with large-flow confirmation. Recovery context is ${recoveryContext}.`;
+  }
+
+  if (flowSignal === 'moderate_supply_drain' && ['high', 'extreme'].includes(recoveryContext)) {
+    return `${tokenSymbol} shows confirmed CEX supply drain, but recovery context is ${recoveryContext}; treat it as a higher-risk recovery candidate.`;
+  }
+
+  if (flowSignal === 'mixed_supply_drain_with_large_sell_pressure') {
+    return `${tokenSymbol} has general CEX supply drain, but large-flow layer points to sell pressure. Signal is mixed.`;
+  }
+
+  if (flowSignal === 'unconfirmed_supply_drain') {
+    return `${tokenSymbol} shows CEX supply drain, but without large-flow confirmation. Signal is weak or incomplete.`;
+  }
+
+  if (flowSignal.includes('sell_pressure')) {
+    return `${tokenSymbol} shows possible CEX sell pressure. This is not an accumulation-style flow profile.`;
+  }
+
+  if (riskFlags.includes('weak_flow')) {
+    return `${tokenSymbol} has weak flow evidence. Do not over-interpret the current data.`;
+  }
+
+  return `${tokenSymbol} is a watchlist candidate, but the signal requires more context.`;
+}
+
+function buildAnalysisProfile({
+  tokenSymbol,
+  regimeHint,
+  largeFlowHint,
+  strength,
+  priceContext,
+  activeDays,
+  cexNetflowUsd,
+  largeNetflowUsd
+}) {
+  const recoveryContext = getRecoveryContext(priceContext);
+  const flowSignal = getFlowSignal({
+    regimeHint,
+    largeFlowHint,
+    strength
+  });
+
+  const riskFlags = buildRiskFlags({
+    regimeHint,
+    largeFlowHint,
+    strength,
+    priceContext,
+    activeDays,
+    cexNetflowUsd,
+    largeNetflowUsd
+  });
+
+  const profileLabel = getProfileLabel({
+    flowSignal,
+    recoveryContext,
+    riskFlags
+  });
+
+  const interpretation = getInterpretation({
+    tokenSymbol,
+    flowSignal,
+    recoveryContext,
+    riskFlags
+  });
+
+  return {
+    profileLabel,
+    flowSignal,
+    recoveryContext,
+    riskFlags,
+    interpretation,
+    version: 'v2-flow-recovery-profile'
+  };
+}
+
 function normalizeRow(row) {
   const cexNetflowUsd = toNumber(row.cex_netflow_usd);
   const cexNetflow = toNumber(row.cex_netflow);
   const largeNetflowUsd = toNumber(row.large_netflow_usd);
   const activeDays = toNumber(row.active_days);
+
+  const priceContext = normalizePriceContext(row);
+
+  const regimeHint = getRegimeHint({
+    cexNetflowUsd,
+    cexNetflow
+  });
+
+  const largeFlowHint = getLargeFlowHint({
+    largeNetflowUsd
+  });
+
+  const strength = getStrength({
+    cexNetflowUsd,
+    largeNetflowUsd,
+    activeDays
+  });
 
   return {
     token: {
@@ -220,21 +479,23 @@ function normalizeRow(row) {
       thresholdUsd: toNumber(row.large_transfer_threshold_usd)
     },
 
-    priceContext: normalizePriceContext(row),
+    priceContext,
 
-    regimeHint: getRegimeHint({
+    regimeHint,
+
+    largeFlowHint,
+
+    strength,
+
+    analysisProfile: buildAnalysisProfile({
+      tokenSymbol: row.token_symbol,
+      regimeHint,
+      largeFlowHint,
+      strength,
+      priceContext,
+      activeDays,
       cexNetflowUsd,
-      cexNetflow
-    }),
-
-    largeFlowHint: getLargeFlowHint({
       largeNetflowUsd
-    }),
-
-    strength: getStrength({
-      cexNetflowUsd,
-      largeNetflowUsd,
-      activeDays
     })
   };
 }
