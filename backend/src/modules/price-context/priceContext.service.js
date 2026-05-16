@@ -12,6 +12,10 @@ function makeAppError(message, statusCode, code, details = null) {
   return error;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function toNumber(value) {
   if (value === null || value === undefined || value === '') return 0;
   return Number(value);
@@ -70,6 +74,36 @@ function serializePriceContextRow(row) {
   };
 }
 
+async function getMarketRowWithFallback({
+  token,
+  marketById
+}) {
+  const primaryRow = marketById.get(token.coingecko_id);
+
+  if (primaryRow) {
+    return {
+      market: primaryRow,
+      source: 'coingecko_markets'
+    };
+  }
+
+  await sleep(Number(process.env.COINGECKO_FALLBACK_DELAY_MS || 700));
+
+  const fallbackRow = await coingeckoMarketDataClient.fetchCoinMarketDataById(token.coingecko_id);
+
+  if (!fallbackRow) {
+    return {
+      market: null,
+      source: null
+    };
+  }
+
+  return {
+    market: fallbackRow,
+    source: 'coingecko_coin_market_data'
+  };
+}
+
 async function updateTokenPriceContext({
   symbols
 }) {
@@ -93,12 +127,6 @@ async function updateTokenPriceContext({
     };
   }
 
-  const tokenByCoingeckoId = new Map();
-
-  for (const token of tokens) {
-    tokenByCoingeckoId.set(token.coingecko_id, token);
-  }
-
   const markets = await coingeckoMarketDataClient.fetchMarketsByIds(
     tokens.map((token) => token.coingecko_id)
   );
@@ -112,61 +140,85 @@ async function updateTokenPriceContext({
   const results = [];
   let updated = 0;
   let skipped = 0;
+  let failed = 0;
 
   for (const token of tokens) {
-    const market = marketById.get(token.coingecko_id);
+    try {
+      const {
+        market,
+        source
+      } = await getMarketRowWithFallback({
+        token,
+        marketById
+      });
 
-    if (!market) {
-      skipped += 1;
+      if (!market) {
+        skipped += 1;
+        results.push({
+          symbol: token.symbol,
+          status: 'skipped',
+          reason: 'CoinGecko market row not found',
+          coingeckoId: token.coingecko_id
+        });
+        continue;
+      }
+
+      const currentPriceUsd = toNumber(market.current_price);
+      const athUsd = toNumber(market.ath);
+      const drawdownFromAthPct = calculateDrawdownFromAthPct({
+        currentPriceUsd,
+        athUsd
+      });
+      const upsideToAthPct = calculateUpsideToAthPct({
+        currentPriceUsd,
+        athUsd
+      });
+
+      await priceContextRepository.upsertPriceContext({
+        tokenId: token.id,
+        currentPriceUsd,
+        athUsd,
+        athDate: market.ath_date || null,
+        drawdownFromAthPct,
+        upsideToAthPct,
+        athChangePercentage: market.ath_change_percentage ?? drawdownFromAthPct,
+        provider: 'coingecko',
+        source,
+        rawPayload: market
+      });
+
+      updated += 1;
+
       results.push({
         symbol: token.symbol,
-        status: 'skipped',
-        reason: 'CoinGecko market row not found'
+        status: 'updated',
+        source,
+        currentPriceUsd,
+        athUsd,
+        drawdownFromAthPct,
+        upsideToAthPct,
+        athDate: market.ath_date || null
       });
-      continue;
+    } catch (error) {
+      failed += 1;
+
+      results.push({
+        symbol: token.symbol,
+        status: 'failed',
+        coingeckoId: token.coingecko_id,
+        error: {
+          code: error.code || 'PRICE_CONTEXT_UPDATE_FAILED',
+          message: error.message,
+          details: error.details || null
+        }
+      });
     }
-
-    const currentPriceUsd = toNumber(market.current_price);
-    const athUsd = toNumber(market.ath);
-    const drawdownFromAthPct = calculateDrawdownFromAthPct({
-      currentPriceUsd,
-      athUsd
-    });
-    const upsideToAthPct = calculateUpsideToAthPct({
-      currentPriceUsd,
-      athUsd
-    });
-
-    await priceContextRepository.upsertPriceContext({
-      tokenId: token.id,
-      currentPriceUsd,
-      athUsd,
-      athDate: market.ath_date || null,
-      drawdownFromAthPct,
-      upsideToAthPct,
-      athChangePercentage: market.ath_change_percentage ?? drawdownFromAthPct,
-      provider: 'coingecko',
-      source: 'coingecko_markets',
-      rawPayload: market
-    });
-
-    updated += 1;
-
-    results.push({
-      symbol: token.symbol,
-      status: 'updated',
-      currentPriceUsd,
-      athUsd,
-      drawdownFromAthPct,
-      upsideToAthPct,
-      athDate: market.ath_date || null
-    });
   }
 
   return {
     updated,
     skipped,
-    failed: 0,
+    failed,
     items: results
   };
 }

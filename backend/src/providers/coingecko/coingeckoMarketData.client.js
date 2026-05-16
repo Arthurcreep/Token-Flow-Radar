@@ -36,7 +36,7 @@ async function fetchMarketsByIds(coingeckoIds = []) {
     url.searchParams.set('vs_currency', 'usd');
     url.searchParams.set('ids', chunk.join(','));
     url.searchParams.set('order', 'market_cap_desc');
-    url.searchParams.set('per_page', String(chunk.length));
+    url.searchParams.set('per_page', String(Math.max(chunk.length, 1)));
     url.searchParams.set('page', '1');
     url.searchParams.set('sparkline', 'false');
     url.searchParams.set('price_change_percentage', '24h,7d,30d');
@@ -78,6 +78,55 @@ async function fetchMarketsByIds(coingeckoIds = []) {
   return allRows;
 }
 
+async function fetchCoinMarketDataById(coingeckoId) {
+  const url = new URL(`${COINGECKO_API_URL}/coins/${coingeckoId}`);
+
+  url.searchParams.set('localization', 'false');
+  url.searchParams.set('tickers', 'false');
+  url.searchParams.set('market_data', 'true');
+  url.searchParams.set('community_data', 'false');
+  url.searchParams.set('developer_data', 'false');
+  url.searchParams.set('sparkline', 'false');
+
+  const response = await fetch(url, {
+    headers: {
+      accept: 'application/json'
+    }
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw makeAppError(
+      'CoinGecko coin market_data fallback failed',
+      502,
+      'COINGECKO_COIN_MARKET_DATA_FAILED',
+      {
+        status: response.status,
+        coingeckoId
+      }
+    );
+  }
+
+  const payload = await response.json();
+  const marketData = payload.market_data || {};
+
+  return {
+    id: payload.id,
+    symbol: payload.symbol,
+    name: payload.name,
+    current_price: marketData.current_price?.usd ?? null,
+    ath: marketData.ath?.usd ?? null,
+    ath_date: marketData.ath_date?.usd ?? null,
+    ath_change_percentage: marketData.ath_change_percentage?.usd ?? null,
+    fallbackSource: 'coingecko_coin_market_data',
+    raw: payload
+  };
+}
+
 module.exports = {
-  fetchMarketsByIds
+  fetchMarketsByIds,
+  fetchCoinMarketDataById
 };
