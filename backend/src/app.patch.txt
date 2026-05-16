@@ -1,11 +1,10 @@
-Add this to backend/src/app.js:
+Make sure backend/src/app.js has:
 
-1. Add import near other route imports:
+const tokenImportRoutes = require('./modules/token-import/tokenImport.routes');
 
-const marketLeaderboardRoutes = require('./modules/markets/marketLeaderboard.routes');
+and:
 
-2. Add route registration near other /api routes:
+app.use('/api/tokens', tokenImportRoutes);
+app.use('/api/tokens', tokenRoutes);
 
-app.use('/api/markets', marketLeaderboardRoutes);
-
-Do not remove existing routes.
+tokenImportRoutes must be registered before tokenRoutes if tokenRoutes has broad dynamic routes.

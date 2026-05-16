@@ -18,6 +18,25 @@ async function importToken(req, res) {
   });
 }
 
+async function resolveToken(req, res) {
+  const {
+    chain,
+    query
+  } = req.validated.body;
+
+  const data = await tokenImportService.resolveToken({
+    chain,
+    query
+  });
+
+  res.status(data.status.alreadyExisted ? 200 : 201).json({
+    success: true,
+    data,
+    meta: {}
+  });
+}
+
 module.exports = {
-  importToken
+  importToken,
+  resolveToken
 };

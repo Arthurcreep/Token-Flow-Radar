@@ -17,6 +17,18 @@ function normalizeContractAddress(contractAddress) {
   return contractAddress.trim().toLowerCase();
 }
 
+function normalizeSymbol(symbol) {
+  return symbol.trim().toUpperCase();
+}
+
+function isEthereumAddress(value) {
+  return /^0x[a-f0-9]{40}$/i.test(String(value || '').trim());
+}
+
+function isSymbol(value) {
+  return /^[a-zA-Z0-9]{2,32}$/.test(String(value || '').trim());
+}
+
 function serializeToken(token) {
   const plain = token?.toJSON ? token.toJSON() : token;
 
@@ -56,6 +68,7 @@ async function importEthereumToken({
 
   if (existingToken) {
     return {
+      inputType: 'contract_address',
       token: serializeToken(existingToken),
       status: {
         alreadyExisted: true,
@@ -114,6 +127,7 @@ async function importEthereumToken({
   });
 
   return {
+    inputType: 'contract_address',
     token: serializeToken(token),
     metadata: {
       totalSupplyRaw: metadata.totalSupplyRaw
@@ -129,6 +143,98 @@ async function importEthereumToken({
   };
 }
 
+async function resolveTokenBySymbol({
+  chain,
+  symbol
+}) {
+  const normalizedSymbol = normalizeSymbol(symbol);
+
+  const token = await tokenImportRepository.findTokenBySymbol(normalizedSymbol);
+
+  if (!token || token.chain !== chain) {
+    throw makeAppError(
+      `Token symbol ${normalizedSymbol} was not found. Paste ERC-20 contract address to import it.`,
+      404,
+      'TOKEN_NOT_FOUND_BY_SYMBOL',
+      {
+        chain,
+        symbol: normalizedSymbol,
+        inputType: 'symbol',
+        hint: 'Symbol lookup only searches local DB. New tokens must be imported by contract address.'
+      }
+    );
+  }
+
+  return {
+    inputType: 'symbol',
+    token: serializeToken(token),
+    status: {
+      alreadyExisted: true,
+      metadataLoaded: true,
+      coingeckoMatched: Boolean(token.coingecko_id),
+      readyForCexFlowAnalysis: true,
+      warnings: []
+    }
+  };
+}
+
+async function resolveToken({
+  chain,
+  query
+}) {
+  if (chain !== 'ethereum') {
+    throw makeAppError(
+      'Only ethereum chain is supported in this MVP token resolver.',
+      422,
+      'UNSUPPORTED_CHAIN',
+      {
+        chain
+      }
+    );
+  }
+
+  const normalizedQuery = String(query || '').trim();
+
+  if (!normalizedQuery) {
+    throw makeAppError(
+      'Token query is required.',
+      400,
+      'TOKEN_QUERY_REQUIRED',
+      {
+        inputType: 'unknown'
+      }
+    );
+  }
+
+  if (isEthereumAddress(normalizedQuery)) {
+    return importEthereumToken({
+      chain,
+      contractAddress: normalizedQuery
+    });
+  }
+
+  if (isSymbol(normalizedQuery)) {
+    return resolveTokenBySymbol({
+      chain,
+      symbol: normalizedQuery
+    });
+  }
+
+  throw makeAppError(
+    'Query must be a token symbol or a valid Ethereum contract address.',
+    422,
+    'INVALID_TOKEN_QUERY',
+    {
+      query: normalizedQuery,
+      expected: [
+        'symbol like UNI',
+        'contract address like 0x514910771af9ca656af840dff83e8264ecf986ca'
+      ]
+    }
+  );
+}
+
 module.exports = {
-  importEthereumToken
+  importEthereumToken,
+  resolveToken
 };
