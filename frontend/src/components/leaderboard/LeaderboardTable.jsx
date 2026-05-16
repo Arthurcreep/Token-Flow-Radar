@@ -35,6 +35,16 @@ function getSignedUsdClass(value) {
   return 'text-slate-300';
 }
 
+function getDrawdownClass(value) {
+  const numberValue = Number(value || 0);
+
+  if (numberValue <= -95) return 'text-red-300';
+  if (numberValue <= -85) return 'text-amber-300';
+  if (numberValue < 0) return 'text-slate-300';
+
+  return 'text-slate-400';
+}
+
 function normalizeLabel(value) {
   return String(value || 'unknown').replaceAll('_', ' ');
 }
@@ -46,12 +56,77 @@ function getTokenDirectionNote(item) {
   return 'Mixed general vs large layer';
 }
 
+function formatPercent(value, digits = 1) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return '—';
+  }
+
+  const numberValue = Number(value);
+  const sign = numberValue > 0 ? '+' : '';
+
+  return `${sign}${numberValue.toFixed(digits)}%`;
+}
+
+function formatPrice(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return '—';
+  }
+
+  const numberValue = Number(value);
+
+  if (numberValue < 0.01) {
+    return `$${numberValue.toFixed(6)}`;
+  }
+
+  if (numberValue < 1) {
+    return `$${numberValue.toFixed(4)}`;
+  }
+
+  return formatCompactUsd(numberValue);
+}
+
+function PriceContextCell({ priceContext }) {
+  if (!priceContext) {
+    return (
+      <div>
+        <p className="font-semibold text-slate-500">No price context</p>
+        <p className="mt-1 text-xs text-slate-600">Run price context update</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p className="font-black text-white">
+        {formatPrice(priceContext.currentPriceUsd)}
+      </p>
+
+      <p className="mt-1 text-xs text-slate-500">
+        ATH {formatPrice(priceContext.athUsd)}
+      </p>
+
+      <p className={['mt-2 text-xs font-bold', getDrawdownClass(priceContext.drawdownFromAthPct)].join(' ')}>
+        DD {formatPercent(priceContext.drawdownFromAthPct)}
+      </p>
+
+      <p className="mt-1 text-xs font-bold text-cyan-300">
+        To ATH {formatPercent(priceContext.upsideToAthPct)}
+      </p>
+    </div>
+  );
+}
+
 export default function LeaderboardTable({ items = [], totalItems = 0, selectedFilter = 'all' }) {
   return (
     <Card
       title="CEX Flow Leaderboard"
       subtitle={`Showing ${items.length} of ${totalItems} tokens. Negative netflow means supply leaves known CEX wallets.`}
     >
+      <div className="mb-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs leading-5 text-amber-100/80">
+        <span className="font-bold text-amber-200">To ATH is not a forecast.</span>{' '}
+        It only shows historical recovery distance from current price back to the previous all-time high.
+      </div>
+
       <div className="overflow-x-auto">
         <table className="min-w-full text-left text-sm">
           <thead>
@@ -60,6 +135,7 @@ export default function LeaderboardTable({ items = [], totalItems = 0, selectedF
               <th className="px-4 py-3">Regime</th>
               <th className="px-4 py-3">Netflow USD</th>
               <th className="px-4 py-3">Large Netflow</th>
+              <th className="px-4 py-3">Price Context</th>
               <th className="px-4 py-3">Large Flow</th>
               <th className="px-4 py-3">Active</th>
               <th className="px-4 py-3">Strength</th>
@@ -100,6 +176,10 @@ export default function LeaderboardTable({ items = [], totalItems = 0, selectedF
                     {formatCompactUsd(item.large.netflowUsd)}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">threshold {formatCompactUsd(item.large.thresholdUsd)}</p>
+                </td>
+
+                <td className="px-4 py-4">
+                  <PriceContextCell priceContext={item.priceContext} />
                 </td>
 
                 <td className="px-4 py-4">

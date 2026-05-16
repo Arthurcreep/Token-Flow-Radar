@@ -6,7 +6,7 @@ export default function LeaderboardGuide() {
       title="How to read this table"
       subtitle="This leaderboard is a flow-anomaly shortlist. It is not a buy/sell signal."
     >
-      <div className="grid gap-4 lg:grid-cols-4">
+      <div className="grid gap-4 lg:grid-cols-5">
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
           <p className="text-sm font-black text-emerald-300">Negative Netflow USD</p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
@@ -29,7 +29,14 @@ export default function LeaderboardGuide() {
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-          <p className="text-sm font-black text-amber-300">out / in</p>
+          <p className="text-sm font-black text-amber-300">To ATH</p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Historical recovery distance to previous all-time high. It is <span className="font-semibold text-amber-300">not a forecast</span>.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+          <p className="text-sm font-black text-fuchsia-300">out / in</p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
             Count of large outflow and inflow transactions. It is not token amount.
           </p>
