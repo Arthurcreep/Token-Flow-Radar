@@ -1,14 +1,13 @@
 const { z } = require('zod');
 
-const supportedSymbols = ['ARB', '1INCH', 'UNI', 'AAVE', 'LINK'];
 const supportedRanges = ['1d', '7d', '1m', '1y', 'all'];
 
 const symbolParam = z
   .string()
   .trim()
   .transform((value) => value.toUpperCase())
-  .refine((value) => supportedSymbols.includes(value), {
-    message: 'Unsupported token symbol'
+  .refine((value) => /^[A-Z0-9]{2,32}$/.test(value), {
+    message: 'Token symbol must contain 2-32 uppercase letters or numbers'
   });
 
 const optionalSource = z
