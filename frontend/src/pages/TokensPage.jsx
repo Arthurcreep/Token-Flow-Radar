@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 
 import { getTokenOverview, getTokens } from '../api/tokensApi';
-import Badge from '../components/Badge';
-import DataModeBadge from '../components/DataModeBadge';
-import LoadingState from '../components/LoadingState';
-import ErrorState from '../components/ErrorState';
-import { formatPercent, getRegimeStyles, shortAddress } from '../utils/format';
+import LoadingState from '../components/common/LoadingState';
+import ErrorState from '../components/common/ErrorState';
+import TokenCard from '../components/token/TokenCard';
+import { useTranslation } from '../i18n/useTranslation';
 
 export default function TokensPage() {
+  const { t } = useTranslation();
+
   const [tokens, setTokens] = useState([]);
   const [overviews, setOverviews] = useState({});
   const [status, setStatus] = useState('loading');
@@ -44,29 +44,32 @@ export default function TokensPage() {
     return Object.values(overviews).filter((item) => item?.dataFreshness === 'ready').length;
   }, [overviews]);
 
-  if (status === 'loading') return <LoadingState message="Loading token radar..." />;
-  if (status === 'error') return <ErrorState message="Failed to load tokens" />;
+  if (status === 'loading') {
+    return <LoadingState message="Loading token radar..." />;
+  }
+
+  if (status === 'error') {
+    return <ErrorState message={t('common.failedToLoadTokens')} />;
+  }
 
   return (
     <div className="space-y-8">
       <section className="panel overflow-hidden p-6 md:p-8">
         <div className="grid gap-6 lg:grid-cols-[1.4fr_0.6fr] lg:items-end">
           <div>
-            <p className="metric-label">Ethereum mainnet MVP</p>
-            <h1 className="mt-3 page-title">Token radar watchlist</h1>
-            <p className="page-subtitle">
-              Карточки показывают текущий regime, score и готовность данных. Красная плашка означает,
-              что сигнал построен на demo seed data, а не на реальном рынке.
-            </p>
+            <p className="metric-label">{t('tokens.eyebrow')}</p>
+            <h1 className="mt-3 page-title">{t('tokens.title')}</h1>
+            <p className="page-subtitle">{t('tokens.subtitle')}</p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="soft-panel p-4">
-              <p className="metric-label">Tokens</p>
+              <p className="metric-label">{t('tokens.totalTokens')}</p>
               <p className="metric-value">{tokens.length}</p>
             </div>
+
             <div className="soft-panel p-4">
-              <p className="metric-label">Ready</p>
+              <p className="metric-label">{t('tokens.readyTokens')}</p>
               <p className="metric-value">{readyCount}</p>
             </div>
           </div>
@@ -74,66 +77,13 @@ export default function TokensPage() {
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {tokens.map((token) => {
-          const overview = overviews[token.symbol];
-          const regime = overview?.regime || 'UNCLEAR';
-
-          return (
-            <Link
-              key={token.id}
-              to={`/tokens/${token.symbol}`}
-              className="group panel block p-5 transition hover:-translate-y-0.5 hover:border-cyan-400/30 hover:bg-slate-900/90"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <h2 className="text-3xl font-black tracking-tight text-white">{token.symbol}</h2>
-                    <Badge className={getRegimeStyles(regime)}>{regime}</Badge>
-                  </div>
-                  <p className="mt-1 text-sm text-slate-400">{token.name}</p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-right">
-                  <p className="text-xs text-slate-500">Score</p>
-                  <p className="text-2xl font-bold text-white">{overview?.finalScore ?? '—'}</p>
-                </div>
-              </div>
-
-              <div className="mt-5">
-                <DataModeBadge
-                  dataMode={overview?.dataMode || 'not_calculated'}
-                  sourceLabel={overview?.sourceLabel}
-                  sourceWarning={overview?.sourceWarning}
-                />
-              </div>
-
-              <div className="mt-6 grid grid-cols-2 gap-3">
-                <div className="rounded-2xl bg-slate-950/70 p-4">
-                  <p className="text-xs text-slate-500">Confidence</p>
-                  <p className="mt-1 text-lg font-semibold text-slate-200">
-                    {overview?.confidence !== null && overview?.confidence !== undefined
-                      ? formatPercent(overview.confidence)
-                      : '—'}
-                  </p>
-                </div>
-                <div className="rounded-2xl bg-slate-950/70 p-4">
-                  <p className="text-xs text-slate-500">Freshness</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-200">
-                    {overview?.dataFreshness || 'unknown'}
-                  </p>
-                </div>
-              </div>
-
-              <p className="mt-5 break-all rounded-xl bg-slate-950/50 p-3 font-mono text-xs text-slate-500">
-                {shortAddress(token.contractAddress)} · {token.chain}
-              </p>
-
-              <div className="mt-5 text-sm font-semibold text-cyan-300 opacity-0 transition group-hover:opacity-100">
-                Open token dashboard →
-              </div>
-            </Link>
-          );
-        })}
+        {tokens.map((token) => (
+          <TokenCard
+            key={token.id}
+            token={token}
+            overview={overviews[token.symbol]}
+          />
+        ))}
       </section>
     </div>
   );

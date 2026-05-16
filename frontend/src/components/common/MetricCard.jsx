@@ -1,4 +1,4 @@
-import { getSignedClass } from '../utils/format';
+import { getSignedClass } from '../../utils/format';
 
 export default function MetricCard({ label, value, hint, signed = false, right }) {
   return (

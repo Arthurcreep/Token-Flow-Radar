@@ -9,7 +9,9 @@ export default function Card({ title, subtitle, children, right, className = '' 
                 {title}
               </h2>
             )}
-            {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
+            {subtitle && (
+              <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+            )}
           </div>
           {right}
         </div>
