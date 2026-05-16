@@ -1,0 +1,13 @@
+Optional nav update for frontend/src/components/layout/AppLayout.jsx:
+
+Add a link to /leaderboard in your navigation.
+
+Example if your layout has NavLink:
+
+<NavLink to="/leaderboard">Leaderboard</NavLink>
+
+Or if it uses plain Link:
+
+<Link to="/leaderboard">Leaderboard</Link>
+
+Do not replace the whole AppLayout blindly unless your current file is simple.
