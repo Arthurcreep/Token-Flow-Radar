@@ -1,139 +1,103 @@
 const cexFlowRepository = require('./cexFlow.repository');
 const NotFoundError = require('../../errors/NotFoundError');
 
-function numberValue(value) {
-  if (value === null || value === undefined) return 0;
+const DEFAULT_LARGE_TRANSFER_THRESHOLD_USD = 50000;
+
+function toNumber(value) {
+  if (value === null || value === undefined || value === '') return 0;
   return Number(value);
 }
 
-function getDateKey(timestamp) {
-  return new Date(timestamp).toISOString().slice(0, 10);
+function toDateKey(value) {
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+function getAddressEntityId(address) {
+  return address?.entity_id || address?.entityId || address?.entity?.id || null;
+}
+
+function isSameEntity(from, to) {
+  const fromEntityId = getAddressEntityId(from);
+  const toEntityId = getAddressEntityId(to);
+
+  if (!fromEntityId || !toEntityId) return false;
+
+  return String(fromEntityId) === String(toEntityId);
 }
 
 function isCexAddress(address) {
-  if (!address) return false;
-
-  return (
-    address.address_type === 'cex' ||
-    address.entity?.entity_type === 'cex'
-  );
-}
-
-function getEntityId(address) {
-  if (!address) return null;
-  if (!address.entity_id) return null;
-  return String(address.entity_id);
-}
-
-function getDataModeFromSource(source) {
-  if (!source) return 'unknown';
-  if (source.includes('manual_seed_fake')) return 'fake';
-  if (source.includes('etherscan')) return 'real';
-  if (source.includes('mixed')) return 'mixed';
-  return 'unknown';
+  const type = address?.address_type || address?.addressType;
+  return type === 'cex';
 }
 
 function getCalculatedSource(source) {
-  if (!source) return 'calculated_mixed_or_all';
+  if (!source) return 'calculated_from_all_sources';
   return `calculated_from_${source}`;
 }
 
-function createEmptyDay({ tokenId, date, source }) {
+function getDataModeFromSource(source) {
+  if (!source) return 'mixed';
+
+  if (source.includes('etherscan')) return 'real';
+  if (source.includes('manual_seed') || source.includes('fake')) return 'fake';
+
+  return 'mixed';
+}
+
+function getRegimeHint(summary) {
+  if (summary.cexNetflow > 0) return 'CEX_SELL_PRESSURE';
+  if (summary.cexNetflow < 0) return 'CEX_SUPPLY_DRAIN';
+
+  return 'NEUTRAL';
+}
+
+function emptyDailyRow(date) {
   return {
-    token_id: tokenId,
     date,
-    cex_inflow: '0',
-    cex_outflow: '0',
-    cex_netflow: '0',
-    cex_inflow_usd: '0',
-    cex_outflow_usd: '0',
-    cex_netflow_usd: '0',
-    inflow_tx_count: 0,
-    outflow_tx_count: 0,
-    large_inflow_count: 0,
-    large_outflow_count: 0,
-    source,
-    created_at: new Date(),
-    updated_at: new Date()
+    cexInflow: 0,
+    cexOutflow: 0,
+    cexNetflow: 0,
+    cexInflowUsd: 0,
+    cexOutflowUsd: 0,
+    cexNetflowUsd: 0,
+    inflowTxCount: 0,
+    outflowTxCount: 0,
+    largeInflowCount: 0,
+    largeOutflowCount: 0,
+    largeInflowUsd: 0,
+    largeOutflowUsd: 0,
+    largeNetflowUsd: 0
   };
 }
 
-function addAmount(row, field, value) {
-  const current = numberValue(row[field]);
-  row[field] = String(current + numberValue(value));
-}
-
-function increment(row, field) {
-  row[field] += 1;
-}
-
-function classifyTransfer(transfer) {
-  const fromIsCex = isCexAddress(transfer.fromAddress);
-  const toIsCex = isCexAddress(transfer.toAddress);
-
-  if (!fromIsCex && !toIsCex) {
-    return 'ignored';
+function ensureDailyRow(map, date) {
+  if (!map.has(date)) {
+    map.set(date, emptyDailyRow(date));
   }
 
-  if (fromIsCex && toIsCex) {
-    const fromEntityId = getEntityId(transfer.fromAddress);
-    const toEntityId = getEntityId(transfer.toAddress);
-
-    if (fromEntityId && toEntityId && fromEntityId === toEntityId) {
-      return 'same_entity_ignored';
-    }
-
-    return 'cex_to_cex_ignored';
-  }
-
-  if (!fromIsCex && toIsCex) {
-    return 'inflow';
-  }
-
-  if (fromIsCex && !toIsCex) {
-    return 'outflow';
-  }
-
-  return 'ignored';
+  return map.get(date);
 }
 
-function mapCexFlow(row) {
-  return {
-    id: row.id,
-    token: {
-      id: row.token.id,
-      symbol: row.token.symbol,
-      name: row.token.name
-    },
-    date: row.date,
-    cexInflow: numberValue(row.cex_inflow),
-    cexOutflow: numberValue(row.cex_outflow),
-    cexNetflow: numberValue(row.cex_netflow),
-    cexInflowUsd: numberValue(row.cex_inflow_usd),
-    cexOutflowUsd: numberValue(row.cex_outflow_usd),
-    cexNetflowUsd: numberValue(row.cex_netflow_usd),
-    inflowTxCount: row.inflow_tx_count,
-    outflowTxCount: row.outflow_tx_count,
-    largeInflowCount: row.large_inflow_count,
-    largeOutflowCount: row.large_outflow_count,
-    source: row.source,
-    dataMode: getDataModeFromSource(row.source)
-  };
-}
+function buildSummary(rows) {
+  return rows.reduce(
+    (acc, row) => {
+      acc.cexInflow += toNumber(row.cexInflow);
+      acc.cexOutflow += toNumber(row.cexOutflow);
+      acc.cexNetflow += toNumber(row.cexNetflow);
 
-function summarizeFlows(items) {
-  const summary = items.reduce(
-    (acc, item) => {
-      acc.cexInflow += item.cexInflow;
-      acc.cexOutflow += item.cexOutflow;
-      acc.cexNetflow += item.cexNetflow;
-      acc.cexInflowUsd += item.cexInflowUsd;
-      acc.cexOutflowUsd += item.cexOutflowUsd;
-      acc.cexNetflowUsd += item.cexNetflowUsd;
-      acc.inflowTxCount += item.inflowTxCount;
-      acc.outflowTxCount += item.outflowTxCount;
-      acc.largeInflowCount += item.largeInflowCount;
-      acc.largeOutflowCount += item.largeOutflowCount;
+      acc.cexInflowUsd += toNumber(row.cexInflowUsd);
+      acc.cexOutflowUsd += toNumber(row.cexOutflowUsd);
+      acc.cexNetflowUsd += toNumber(row.cexNetflowUsd);
+
+      acc.inflowTxCount += toNumber(row.inflowTxCount);
+      acc.outflowTxCount += toNumber(row.outflowTxCount);
+
+      acc.largeInflowCount += toNumber(row.largeInflowCount);
+      acc.largeOutflowCount += toNumber(row.largeOutflowCount);
+
+      acc.largeInflowUsd += toNumber(row.largeInflowUsd);
+      acc.largeOutflowUsd += toNumber(row.largeOutflowUsd);
+      acc.largeNetflowUsd += toNumber(row.largeNetflowUsd);
 
       return acc;
     },
@@ -147,26 +111,83 @@ function summarizeFlows(items) {
       inflowTxCount: 0,
       outflowTxCount: 0,
       largeInflowCount: 0,
-      largeOutflowCount: 0
+      largeOutflowCount: 0,
+      largeInflowUsd: 0,
+      largeOutflowUsd: 0,
+      largeNetflowUsd: 0
     }
   );
+}
 
-  if (summary.cexNetflow < 0) {
-    summary.regimeHint = 'CEX_SUPPLY_DRAIN';
-  } else if (summary.cexNetflow > 0) {
-    summary.regimeHint = 'CEX_SELL_PRESSURE';
-  } else {
-    summary.regimeHint = 'NEUTRAL';
-  }
+function normalizeDailyRowForDb({
+  tokenId,
+  row,
+  source,
+  dataMode,
+  largeTransferThresholdUsd
+}) {
+  return {
+    token_id: tokenId,
+    date: row.date,
+    cex_inflow: String(row.cexInflow),
+    cex_outflow: String(row.cexOutflow),
+    cex_netflow: String(row.cexNetflow),
+    cex_inflow_usd: String(row.cexInflowUsd),
+    cex_outflow_usd: String(row.cexOutflowUsd),
+    cex_netflow_usd: String(row.cexNetflowUsd),
+    inflow_tx_count: row.inflowTxCount,
+    outflow_tx_count: row.outflowTxCount,
+    large_inflow_count: row.largeInflowCount,
+    large_outflow_count: row.largeOutflowCount,
+    large_inflow_usd: String(row.largeInflowUsd),
+    large_outflow_usd: String(row.largeOutflowUsd),
+    large_netflow_usd: String(row.largeNetflowUsd),
+    large_transfer_threshold_usd: String(largeTransferThresholdUsd),
+    source,
+    data_mode: dataMode
+  };
+}
 
-  return summary;
+function normalizeDailyRowForApi(row) {
+  const plain = row?.toJSON ? row.toJSON() : row;
+
+  return {
+    id: plain.id,
+    token: plain.token
+      ? {
+          id: plain.token.id,
+          symbol: plain.token.symbol,
+          name: plain.token.name
+        }
+      : undefined,
+    date: plain.date,
+    cexInflow: toNumber(plain.cex_inflow ?? plain.cexInflow),
+    cexOutflow: toNumber(plain.cex_outflow ?? plain.cexOutflow),
+    cexNetflow: toNumber(plain.cex_netflow ?? plain.cexNetflow),
+    cexInflowUsd: toNumber(plain.cex_inflow_usd ?? plain.cexInflowUsd),
+    cexOutflowUsd: toNumber(plain.cex_outflow_usd ?? plain.cexOutflowUsd),
+    cexNetflowUsd: toNumber(plain.cex_netflow_usd ?? plain.cexNetflowUsd),
+    inflowTxCount: toNumber(plain.inflow_tx_count ?? plain.inflowTxCount),
+    outflowTxCount: toNumber(plain.outflow_tx_count ?? plain.outflowTxCount),
+    largeInflowCount: toNumber(plain.large_inflow_count ?? plain.largeInflowCount),
+    largeOutflowCount: toNumber(plain.large_outflow_count ?? plain.largeOutflowCount),
+    largeInflowUsd: toNumber(plain.large_inflow_usd ?? plain.largeInflowUsd),
+    largeOutflowUsd: toNumber(plain.large_outflow_usd ?? plain.largeOutflowUsd),
+    largeNetflowUsd: toNumber(plain.large_netflow_usd ?? plain.largeNetflowUsd),
+    largeTransferThresholdUsd: toNumber(
+      plain.large_transfer_threshold_usd ?? plain.largeTransferThresholdUsd
+    ),
+    source: plain.source,
+    dataMode: plain.data_mode ?? plain.dataMode
+  };
 }
 
 async function calculateCexFlows({
   symbol,
-  source,
   fromDate,
-  toDate
+  toDate,
+  source,
+  largeTransferThresholdUsd = DEFAULT_LARGE_TRANSFER_THRESHOLD_USD
 }) {
   const token = await cexFlowRepository.findTokenBySymbol(symbol);
 
@@ -176,132 +197,173 @@ async function calculateCexFlows({
     });
   }
 
+  const thresholdUsd = Number(largeTransferThresholdUsd || DEFAULT_LARGE_TRANSFER_THRESHOLD_USD);
+
   const transfers = await cexFlowRepository.findTransfersForCexFlow({
     tokenId: token.id,
-    source,
     fromDate,
-    toDate
+    toDate,
+    source
   });
 
   const calculatedSource = getCalculatedSource(source);
-  const byDate = new Map();
+  const dataMode = getDataModeFromSource(source);
+  const dailyMap = new Map();
 
-  const stats = {
-    token: token.symbol,
-    source: source || 'all',
-    calculatedSource,
-    dataMode: getDataModeFromSource(calculatedSource),
-    transfersProcessed: transfers.length,
-    cexInflows: 0,
-    cexOutflows: 0,
-    sameEntityIgnored: 0,
-    cexToCexIgnored: 0,
-    ignored: 0
-  };
+  let cexInflows = 0;
+  let cexOutflows = 0;
+  let sameEntityIgnored = 0;
+  let cexToCexIgnored = 0;
+  let ignored = 0;
 
   for (const transfer of transfers) {
-    const date = getDateKey(transfer.timestamp);
+    const from = transfer.fromAddress || transfer.from;
+    const to = transfer.toAddress || transfer.to;
 
-    if (!byDate.has(date)) {
-      byDate.set(
-        date,
-        createEmptyDay({
-          tokenId: token.id,
-          date,
-          source: calculatedSource
-        })
-      );
+    const fromIsCex = isCexAddress(from);
+    const toIsCex = isCexAddress(to);
+
+    if (!fromIsCex && !toIsCex) {
+      ignored += 1;
+      continue;
     }
 
-    const row = byDate.get(date);
-    const classification = classifyTransfer(transfer);
-    const amount = numberValue(transfer.amount_decimal);
-    const amountUsd = numberValue(transfer.amount_usd);
+    if (fromIsCex && toIsCex) {
+      cexToCexIgnored += 1;
+      continue;
+    }
 
-    if (classification === 'inflow') {
-      addAmount(row, 'cex_inflow', amount);
-      addAmount(row, 'cex_netflow', amount);
-      addAmount(row, 'cex_inflow_usd', amountUsd);
-      addAmount(row, 'cex_netflow_usd', amountUsd);
-      increment(row, 'inflow_tx_count');
+    if (isSameEntity(from, to)) {
+      sameEntityIgnored += 1;
+      continue;
+    }
 
-      if (amountUsd >= 1000000 || amount >= 100000) {
-        increment(row, 'large_inflow_count');
+    const date = toDateKey(transfer.timestamp);
+    const row = ensureDailyRow(dailyMap, date);
+
+    const amount = toNumber(transfer.amount_decimal);
+    const amountUsd = toNumber(transfer.amount_usd);
+    const isLarge = amountUsd >= thresholdUsd;
+
+    if (toIsCex) {
+      row.cexInflow += amount;
+      row.cexInflowUsd += amountUsd;
+      row.inflowTxCount += 1;
+      cexInflows += 1;
+
+      if (isLarge) {
+        row.largeInflowCount += 1;
+        row.largeInflowUsd += amountUsd;
       }
 
-      stats.cexInflows += 1;
-    } else if (classification === 'outflow') {
-      addAmount(row, 'cex_outflow', amount);
-      addAmount(row, 'cex_netflow', -amount);
-      addAmount(row, 'cex_outflow_usd', amountUsd);
-      addAmount(row, 'cex_netflow_usd', -amountUsd);
-      increment(row, 'outflow_tx_count');
+      continue;
+    }
 
-      if (amountUsd >= 1000000 || amount >= 100000) {
-        increment(row, 'large_outflow_count');
+    if (fromIsCex) {
+      row.cexOutflow += amount;
+      row.cexOutflowUsd += amountUsd;
+      row.outflowTxCount += 1;
+      cexOutflows += 1;
+
+      if (isLarge) {
+        row.largeOutflowCount += 1;
+        row.largeOutflowUsd += amountUsd;
       }
-
-      stats.cexOutflows += 1;
-    } else if (classification === 'same_entity_ignored') {
-      stats.sameEntityIgnored += 1;
-    } else if (classification === 'cex_to_cex_ignored') {
-      stats.cexToCexIgnored += 1;
-    } else {
-      stats.ignored += 1;
     }
   }
 
-  await cexFlowRepository.deleteCexFlows({
+  const rows = [...dailyMap.values()]
+    .map((row) => ({
+      ...row,
+      cexNetflow: row.cexInflow - row.cexOutflow,
+      cexNetflowUsd: row.cexInflowUsd - row.cexOutflowUsd,
+      largeNetflowUsd: row.largeInflowUsd - row.largeOutflowUsd
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  await cexFlowRepository.deleteDailyFlowsBySource({
     tokenId: token.id,
     source: calculatedSource
   });
 
-  const rows = [...byDate.values()];
-  const created = await cexFlowRepository.bulkCreateCexFlows(rows);
+  const dbRows = rows.map((row) => normalizeDailyRowForDb({
+    tokenId: token.id,
+    row,
+    source: calculatedSource,
+    dataMode,
+    largeTransferThresholdUsd: thresholdUsd
+  }));
+
+  await cexFlowRepository.bulkCreateDailyFlows(dbRows);
 
   return {
     token: token.symbol,
-    source: source || 'all',
+    source,
     calculatedSource,
-    dataMode: getDataModeFromSource(calculatedSource),
-    rowsCalculated: created.length,
-    stats
+    dataMode,
+    rowsCalculated: rows.length,
+    largeTransferThresholdUsd: thresholdUsd,
+    stats: {
+      token: token.symbol,
+      source,
+      calculatedSource,
+      dataMode,
+      transfersProcessed: transfers.length,
+      cexInflows,
+      cexOutflows,
+      sameEntityIgnored,
+      cexToCexIgnored,
+      ignored,
+      largeTransferThresholdUsd: thresholdUsd
+    }
   };
 }
 
 async function getCexFlows({
   symbol,
   source,
-  limit,
-  offset
+  limit = 30,
+  offset = 0
 }) {
-  const result = await cexFlowRepository.findCexFlowsByToken({
-    symbol,
+  const token = await cexFlowRepository.findTokenBySymbol(symbol);
+
+  if (!token) {
+    throw new NotFoundError(`Token ${symbol} not found`, 'TOKEN_NOT_FOUND', {
+      symbol
+    });
+  }
+
+  const { rows, total } = await cexFlowRepository.findDailyFlows({
+    tokenId: token.id,
     source,
     limit,
     offset
   });
 
-  const items = result.rows.map(mapCexFlow);
+  const items = rows.map(normalizeDailyRowForApi);
+  const summary = buildSummary(items);
+
+  summary.regimeHint = getRegimeHint(summary);
+  summary.largeTransferThresholdUsd =
+    items.find((item) => item.largeTransferThresholdUsd)?.largeTransferThresholdUsd || 0;
 
   return {
     data: {
-      summary: summarizeFlows(items),
+      summary,
       items,
       source: source || 'all',
-      dataMode: source ? getDataModeFromSource(source) : 'mixed_or_all'
+      dataMode: items.find((item) => item.dataMode)?.dataMode || 'unknown',
+      largeTransferThresholdUsd: summary.largeTransferThresholdUsd
     },
     meta: {
       limit,
       offset,
-      total: result.count
+      total
     }
   };
 }
 
 module.exports = {
   calculateCexFlows,
-  getCexFlows,
-  getDataModeFromSource,
-  getCalculatedSource
+  getCexFlows
 };

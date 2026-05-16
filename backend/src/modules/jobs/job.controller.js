@@ -6,13 +6,19 @@ const transferValuationService = require('../valuation/transferValuation.service
 
 async function calculateCexFlows(req, res) {
   const { symbol } = req.validated.params;
-  const { fromDate, toDate, source } = req.validated.query;
+  const {
+    fromDate,
+    toDate,
+    source,
+    largeTransferThresholdUsd
+  } = req.validated.query;
 
   const data = await cexFlowService.calculateCexFlows({
     symbol,
     fromDate,
     toDate,
-    source
+    source,
+    largeTransferThresholdUsd
   });
 
   res.json({

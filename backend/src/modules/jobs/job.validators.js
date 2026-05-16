@@ -95,6 +95,15 @@ const optionalBoolean = z
   .default('false')
   .transform((value) => value === true || value === 'true' || value === '1');
 
+const optionalLargeTransferThresholdUsd = z
+  .string()
+  .optional()
+  .default('50000')
+  .transform((value) => Number(value))
+  .refine((value) => Number.isFinite(value) && value >= 0, {
+    message: 'largeTransferThresholdUsd must be a non-negative number'
+  });
+
 const calculateCexFlowsSchema = z.object({
   params: z.object({
     symbol: symbolParam
@@ -102,7 +111,8 @@ const calculateCexFlowsSchema = z.object({
   query: z.object({
     fromDate: optionalDate,
     toDate: optionalDate,
-    source: optionalSource
+    source: optionalSource,
+    largeTransferThresholdUsd: optionalLargeTransferThresholdUsd
   }),
   body: z.object({}).passthrough()
 });
