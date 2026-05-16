@@ -2,6 +2,7 @@ const cexFlowService = require('../cex-flows/cexFlow.service');
 const metricService = require('../metrics/metric.service');
 const signalService = require('../signals/signal.service');
 const transferIngestionService = require('../ingestion/transferIngestion.service');
+const transferValuationService = require('../valuation/transferValuation.service');
 
 async function calculateCexFlows(req, res) {
   const { symbol } = req.validated.params;
@@ -91,10 +92,29 @@ async function ingestRecentTransfers(req, res) {
   });
 }
 
+async function valueTransfers(req, res) {
+  const { symbol } = req.validated.params;
+  const { source, limit, force } = req.validated.query;
+
+  const data = await transferValuationService.valueTransfersForToken({
+    symbol,
+    source,
+    limit,
+    force
+  });
+
+  res.json({
+    success: true,
+    data,
+    meta: {}
+  });
+}
+
 module.exports = {
   calculateCexFlows,
   calculateTokenMetrics,
   generateSignals,
   ingestTransfers,
-  ingestRecentTransfers
+  ingestRecentTransfers,
+  valueTransfers
 };

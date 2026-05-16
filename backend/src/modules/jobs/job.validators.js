@@ -80,6 +80,21 @@ const optionalMaxAddresses = z
     message: 'maxAddresses must be between 1 and 100'
   });
 
+const optionalLimit = z
+  .string()
+  .optional()
+  .default('1000')
+  .transform((value) => Number(value))
+  .refine((value) => Number.isInteger(value) && value > 0 && value <= 5000, {
+    message: 'limit must be between 1 and 5000'
+  });
+
+const optionalBoolean = z
+  .string()
+  .optional()
+  .default('false')
+  .transform((value) => value === true || value === 'true' || value === '1');
+
 const calculateCexFlowsSchema = z.object({
   params: z.object({
     symbol: symbolParam
@@ -138,10 +153,23 @@ const ingestRecentTransfersSchema = z.object({
   body: z.object({}).passthrough()
 });
 
+const valueTransfersSchema = z.object({
+  params: z.object({
+    symbol: symbolParam
+  }),
+  query: z.object({
+    source: optionalSource,
+    limit: optionalLimit,
+    force: optionalBoolean
+  }),
+  body: z.object({}).passthrough()
+});
+
 module.exports = {
   calculateCexFlowsSchema,
   calculateTokenMetricsSchema,
   generateSignalsSchema,
   ingestTransfersSchema,
-  ingestRecentTransfersSchema
+  ingestRecentTransfersSchema,
+  valueTransfersSchema
 };

@@ -8,7 +8,8 @@ const {
   calculateTokenMetricsSchema,
   generateSignalsSchema,
   ingestTransfersSchema,
-  ingestRecentTransfersSchema
+  ingestRecentTransfersSchema,
+  valueTransfersSchema
 } = require('./job.validators');
 
 const router = express.Router();
@@ -23,6 +24,12 @@ router.post(
   '/ingest-recent-transfers/:symbol',
   validateRequest(ingestRecentTransfersSchema),
   asyncHandler(jobController.ingestRecentTransfers)
+);
+
+router.post(
+  '/value-transfers/:symbol',
+  validateRequest(valueTransfersSchema),
+  asyncHandler(jobController.valueTransfers)
 );
 
 router.post(
