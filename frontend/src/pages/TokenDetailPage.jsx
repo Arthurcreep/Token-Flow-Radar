@@ -6,6 +6,7 @@ import Card from '../components/common/Card';
 import ErrorState from '../components/common/ErrorState';
 import LoadingState from '../components/common/LoadingState';
 import LeaderboardRangeSwitch from '../components/leaderboard/LeaderboardRangeSwitch';
+import TokenFlowDiagnostics from '../components/token/TokenFlowDiagnostics';
 
 import {
   formatCompactUsd,
@@ -479,6 +480,8 @@ export default function TokenDetailPage() {
       </div>
 
       <SummarySection profile={profile} />
+
+      <TokenFlowDiagnostics diagnostics={profile.flowDiagnostics} />
 
       <PriceSection priceContext={profile.priceContext} />
 

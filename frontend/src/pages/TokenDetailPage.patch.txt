@@ -1,0 +1,25 @@
+Patch frontend/src/pages/TokenDetailPage.jsx
+
+1. Add import near other imports:
+
+import TokenFlowDiagnostics from '../components/token/TokenFlowDiagnostics';
+
+2. Find this area near the bottom:
+
+<SummarySection profile={profile} />
+
+<PriceSection priceContext={profile.priceContext} />
+
+<DailyFlowTable items={profile.cexFlows?.items || []} />
+
+3. Replace with:
+
+<SummarySection profile={profile} />
+
+<TokenFlowDiagnostics diagnostics={profile.flowDiagnostics} />
+
+<PriceSection priceContext={profile.priceContext} />
+
+<DailyFlowTable items={profile.cexFlows?.items || []} />
+
+This puts diagnostics between summary and price/table.

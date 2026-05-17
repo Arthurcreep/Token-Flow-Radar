@@ -31,6 +31,13 @@ export async function getTokenPriceContext(symbol) {
   return requestJson(`/price-context/${encodeURIComponent(symbol)}`);
 }
 
+export async function getTokenFlowDiagnostics({
+  symbol,
+  range = '1m'
+}) {
+  return requestJson(`/tokens/${encodeURIComponent(symbol)}/flow-diagnostics?range=${encodeURIComponent(range)}`);
+}
+
 export async function getTokenLeaderboardProfile({
   symbol,
   range = '1m',
@@ -58,7 +65,8 @@ export async function getTokenProfile({
   const [
     cexFlows,
     priceContextData,
-    leaderboardProfile
+    leaderboardProfile,
+    flowDiagnostics
   ] = await Promise.all([
     getTokenCexFlows({
       symbol,
@@ -66,6 +74,10 @@ export async function getTokenProfile({
     }),
     getTokenPriceContext(symbol),
     getTokenLeaderboardProfile({
+      symbol,
+      range
+    }),
+    getTokenFlowDiagnostics({
       symbol,
       range
     })
@@ -76,8 +88,9 @@ export async function getTokenProfile({
     range,
     cexFlows,
     priceContext: priceContextData.priceContext || null,
-    token: cexFlows.items?.[0]?.token || priceContextData.token || leaderboardProfile.item?.token || null,
+    token: cexFlows.items?.[0]?.token || priceContextData.token || leaderboardProfile.item?.token || flowDiagnostics.token || null,
     leaderboardItem: leaderboardProfile.item,
-    analysisProfile: leaderboardProfile.item?.analysisProfile || null
+    analysisProfile: leaderboardProfile.item?.analysisProfile || null,
+    flowDiagnostics
   };
 }
