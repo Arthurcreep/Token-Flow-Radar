@@ -252,9 +252,9 @@ export default function LeaderboardOverview({
         />
 
         <CandidateCard
-          title="Главный риск"
+          title="Главная аномалия"
           item={topRiskCandidate}
-          emptyText="В текущей выборке нет выраженного риск-кандидата."
+          emptyText="В текущей выборке нет сильной аномалии с заметными риск-флагами."
         />
       </div>
     </Card>

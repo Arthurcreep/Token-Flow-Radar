@@ -5,63 +5,61 @@ import {
   formatNumber
 } from '../../utils/format';
 
-function toNumber(value) {
+const toNumber = (value) => {
   if (value === null || value === undefined || value === '') return 0;
   return Number(value);
-}
+};
 
-function formatPct(value) {
+const formatPct = (value) => {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
     return '—';
   }
 
   return `${Number(value).toFixed(1)}%`;
-}
+};
 
-function getSignedUsdClass(value) {
+const getSignedUsdClass = (value) => {
   const numberValue = toNumber(value);
 
   if (numberValue < 0) return 'text-emerald-300';
   if (numberValue > 0) return 'text-red-300';
 
   return 'text-slate-300';
-}
+};
 
-function getRiskClass(riskLevel) {
+const getRiskClass = (riskLevel) => {
   if (riskLevel === 'high') return 'border-red-500/40 bg-red-500/10 text-red-300';
   if (riskLevel === 'medium') return 'border-amber-500/40 bg-amber-500/10 text-amber-300';
   if (riskLevel === 'low') return 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300';
 
   return 'border-slate-700 bg-slate-800 text-slate-300';
-}
+};
 
-function translateRiskLevel(riskLevel) {
+const translateRiskLevel = (riskLevel) => {
   if (riskLevel === 'high') return 'высокий';
   if (riskLevel === 'medium') return 'средний';
   if (riskLevel === 'low') return 'низкий';
 
   return 'не определен';
-}
+};
 
-function QuestionCard({
+const QuestionCard = ({
   question
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-      <p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-300">
-        {question.question}
-      </p>
+}) => (
+  <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+    <p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-300">
+      {question.question}
+    </p>
 
-      <p className="mt-3 text-sm leading-6 text-slate-300">
-        {question.answer}
-      </p>
-    </div>
-  );
-}
+    <p className="mt-3 text-sm leading-6 text-slate-300">
+      {question.answer}
+    </p>
+  </div>
+);
 
-function ConcentrationWarning({
+const ConcentrationWarning = ({
   concentrationRisk
-}) {
+}) => {
   if (!concentrationRisk) return null;
 
   const riskLevel = concentrationRisk.riskLevel;
@@ -81,11 +79,11 @@ function ConcentrationWarning({
       а техническим перераспределением ликвидности внутри CEX-инфраструктуры.
     </div>
   );
-}
+};
 
-function MainMetrics({
+const MainMetrics = ({
   diagnostics
-}) {
+}) => {
   const summary = diagnostics?.summary || {};
   const data = diagnostics?.diagnostics || {};
   const concentrationRisk = data.concentrationRisk || {};
@@ -129,96 +127,92 @@ function MainMetrics({
       </Card>
     </div>
   );
-}
+};
 
-function EntityBreakdown({
+const EntityBreakdown = ({
   items = []
-}) {
-  return (
-    <Card
-      title="Участники потока"
-      subtitle="Какие биржи / entity дали основной вклад в движение."
-    >
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-slate-800 text-xs uppercase tracking-[0.16em] text-slate-500">
-              <th className="px-4 py-3">Участник</th>
-              <th className="px-4 py-3">Завод</th>
-              <th className="px-4 py-3">Вывод</th>
-              <th className="px-4 py-3">Netflow</th>
-              <th className="px-4 py-3">Транзакции</th>
-            </tr>
-          </thead>
+}) => (
+  <Card
+    title="Участники потока"
+    subtitle="Какие биржи / entity дали основной вклад в движение."
+  >
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-left text-sm">
+        <thead>
+          <tr className="border-b border-slate-800 text-xs uppercase tracking-[0.16em] text-slate-500">
+            <th className="px-4 py-3">Участник</th>
+            <th className="px-4 py-3">Завод</th>
+            <th className="px-4 py-3">Вывод</th>
+            <th className="px-4 py-3">Netflow</th>
+            <th className="px-4 py-3">Транзакции</th>
+          </tr>
+        </thead>
 
-          <tbody>
-            {items.map((item) => (
-              <tr key={item.key || item.label} className="border-b border-slate-900/80">
-                <td className="px-4 py-4 font-bold text-white">{item.label || item.key}</td>
-                <td className="px-4 py-4 text-red-300">{formatCompactUsd(item.inflowUsd)}</td>
-                <td className="px-4 py-4 text-emerald-300">{formatCompactUsd(item.outflowUsd)}</td>
-                <td className={['px-4 py-4 font-black', getSignedUsdClass(item.netflowUsd)].join(' ')}>
-                  {formatCompactUsd(item.netflowUsd)}
-                </td>
-                <td className="px-4 py-4 text-slate-400">
-                  завод {formatNumber(item.inflowTxCount, 0)} / вывод {formatNumber(item.outflowTxCount, 0)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {!items.length && (
-        <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/60 p-6 text-center">
-          <p className="text-sm font-semibold text-slate-400">Участники не определены.</p>
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function AddressBreakdown({
-  items = []
-}) {
-  return (
-    <Card
-      title="CEX-адреса"
-      subtitle="Какие конкретные адреса дали основной вклад."
-    >
-      <div className="space-y-3">
-        {items.map((item) => (
-          <div key={item.address || item.key} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-            <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="font-black text-white">{item.label || item.address}</p>
-                <p className="mt-1 break-all text-xs text-slate-600">{item.address}</p>
-              </div>
-
-              <p className={['text-lg font-black', getSignedUsdClass(item.netflowUsd)].join(' ')}>
+        <tbody>
+          {items.map((item) => (
+            <tr key={item.key || item.label} className="border-b border-slate-900/80">
+              <td className="px-4 py-4 font-bold text-white">{item.label || item.key}</td>
+              <td className="px-4 py-4 text-red-300">{formatCompactUsd(item.inflowUsd)}</td>
+              <td className="px-4 py-4 text-emerald-300">{formatCompactUsd(item.outflowUsd)}</td>
+              <td className={['px-4 py-4 font-black', getSignedUsdClass(item.netflowUsd)].join(' ')}>
                 {formatCompactUsd(item.netflowUsd)}
-              </p>
+              </td>
+              <td className="px-4 py-4 text-slate-400">
+                завод {formatNumber(item.inflowTxCount, 0)} / вывод {formatNumber(item.outflowTxCount, 0)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    {!items.length && (
+      <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/60 p-6 text-center">
+        <p className="text-sm font-semibold text-slate-400">Участники не определены.</p>
+      </div>
+    )}
+  </Card>
+);
+
+const AddressBreakdown = ({
+  items = []
+}) => (
+  <Card
+    title="CEX-адреса"
+    subtitle="Какие конкретные адреса дали основной вклад."
+  >
+    <div className="space-y-3">
+      {items.map((item) => (
+        <div key={item.address || item.key} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="font-black text-white">{item.label || item.address}</p>
+              <p className="mt-1 break-all text-xs text-slate-600">{item.address}</p>
             </div>
 
-            <p className="mt-3 text-xs text-slate-500">
-              entity: {item.entityName || '—'} · завод {formatCompactUsd(item.inflowUsd)} · вывод {formatCompactUsd(item.outflowUsd)}
+            <p className={['text-lg font-black', getSignedUsdClass(item.netflowUsd)].join(' ')}>
+              {formatCompactUsd(item.netflowUsd)}
             </p>
           </div>
-        ))}
-      </div>
 
-      {!items.length && (
-        <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/60 p-6 text-center">
-          <p className="text-sm font-semibold text-slate-400">Адреса не определены.</p>
+          <p className="mt-3 text-xs text-slate-500">
+            entity: {item.entityName || '—'} · завод {formatCompactUsd(item.inflowUsd)} · вывод {formatCompactUsd(item.outflowUsd)}
+          </p>
         </div>
-      )}
-    </Card>
-  );
-}
+      ))}
+    </div>
 
-export default function TokenFlowDiagnostics({
+    {!items.length && (
+      <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/60 p-6 text-center">
+        <p className="text-sm font-semibold text-slate-400">Адреса не определены.</p>
+      </div>
+    )}
+  </Card>
+);
+
+const TokenFlowDiagnostics = ({
   diagnostics
-}) {
+}) => {
   if (!diagnostics) {
     return (
       <Card
@@ -269,4 +263,6 @@ export default function TokenFlowDiagnostics({
       </div>
     </section>
   );
-}
+};
+
+export default TokenFlowDiagnostics;

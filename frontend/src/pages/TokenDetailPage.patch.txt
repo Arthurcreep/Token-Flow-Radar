@@ -1,25 +1,45 @@
-Patch frontend/src/pages/TokenDetailPage.jsx
+Patch frontend/src/pages/TokenDetailPage.jsx after switching to unified endpoint.
 
-1. Add import near other imports:
+Replace old shape references:
 
-import TokenFlowDiagnostics from '../components/token/TokenFlowDiagnostics';
+1. Replace:
 
-2. Find this area near the bottom:
+const summary = profile?.cexFlows?.summary || {};
+const range = profile?.cexFlows?.range || {};
 
-<SummarySection profile={profile} />
+With:
 
-<PriceSection priceContext={profile.priceContext} />
+const summary = profile?.summary || {};
+const range = profile?.range || {};
+
+2. Replace DailyFlowTable call:
 
 <DailyFlowTable items={profile.cexFlows?.items || []} />
 
-3. Replace with:
+With:
 
-<SummarySection profile={profile} />
+<DailyFlowTable items={profile.dailyFlows || []} />
+
+3. TokenFlowDiagnostics still works, but now pass a compatible wrapper:
+
+<TokenFlowDiagnostics diagnostics={{
+  summary: profile.summary,
+  diagnostics: profile.diagnostics
+}} />
+
+instead of:
 
 <TokenFlowDiagnostics diagnostics={profile.flowDiagnostics} />
 
-<PriceSection priceContext={profile.priceContext} />
+4. In SummarySection, if it reads profile.cexFlows.summary, change to profile.summary.
 
-<DailyFlowTable items={profile.cexFlows?.items || []} />
+Find:
 
-This puts diagnostics between summary and price/table.
+const summary = profile.cexFlows?.summary || {};
+
+Replace with:
+
+const summary = profile.summary || {};
+
+5. If token fallback reads profile.leaderboardItem, keep it, but it will usually be null.
+Use profile.analysisProfile directly where possible.

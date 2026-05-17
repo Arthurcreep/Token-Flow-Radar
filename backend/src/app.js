@@ -16,6 +16,7 @@ const marketLeaderboardRoutes = require('./modules/markets/marketLeaderboard.rou
 const tokenImportRoutes = require('./modules/token-import/tokenImport.routes');
 const priceContextRoutes = require('./modules/price-context/priceContext.routes');
 const flowDiagnosticsRoutes = require('./modules/flow-diagnostics/flowDiagnostics.routes');
+const flowProfileRoutes = require('./modules/flow-profile/flowProfile.routes');
 
 const notFoundHandler = require('./middlewares/notFoundHandler');
 const errorHandler = require('./middlewares/errorHandler');
@@ -40,6 +41,7 @@ app.use('/api', metricRoutes);
 app.use('/api', signalRoutes);
 app.use('/api', cexFlowRoutes);
 app.use('/api', flowDiagnosticsRoutes);
+app.use('/api', flowProfileRoutes);
 app.use('/api/tokens', tokenRoutes);
 app.use('/api/tokens', cexFlowRoutes);
 app.use('/api/tokens', tokenImportRoutes);

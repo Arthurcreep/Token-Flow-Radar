@@ -13,12 +13,12 @@ import {
   formatNumber
 } from '../utils/format';
 
-function toNumber(value) {
+const toNumber = (value) => {
   if (value === null || value === undefined || value === '') return 0;
   return Number(value);
-}
+};
 
-function formatPercent(value, digits = 1) {
+const formatPercent = (value, digits = 1) => {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
     return '—';
   }
@@ -27,9 +27,9 @@ function formatPercent(value, digits = 1) {
   const sign = numberValue > 0 ? '+' : '';
 
   return `${sign}${numberValue.toFixed(digits)}%`;
-}
+};
 
-function formatPrice(value) {
+const formatPrice = (value) => {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
     return '—';
   }
@@ -45,18 +45,18 @@ function formatPrice(value) {
   }
 
   return formatCompactUsd(numberValue);
-}
+};
 
-function getSignedUsdClass(value) {
+const getSignedUsdClass = (value) => {
   const numberValue = toNumber(value);
 
   if (numberValue < 0) return 'text-emerald-300';
   if (numberValue > 0) return 'text-red-300';
 
   return 'text-slate-300';
-}
+};
 
-function getDrawdownClass(value) {
+const getDrawdownClass = (value) => {
   const numberValue = toNumber(value);
 
   if (numberValue <= -95) return 'text-red-300';
@@ -64,54 +64,58 @@ function getDrawdownClass(value) {
   if (numberValue < 0) return 'text-slate-300';
 
   return 'text-slate-400';
-}
+};
 
-function translateRegime(value) {
+const translateRegime = (value) => {
   if (value === 'CEX_SUPPLY_DRAIN') return 'Вывод с бирж';
   if (value === 'CEX_SELL_PRESSURE') return 'Завод на биржи';
   if (value === 'NEUTRAL') return 'Нейтрально';
 
   return 'Не определено';
-}
+};
 
-function translateLargeFlow(value) {
+const translateLargeFlow = (value) => {
   if (value === 'LARGE_SUPPLY_DRAIN') return 'Крупные выводы';
   if (value === 'LARGE_SELL_PRESSURE') return 'Крупные заводы';
   if (value === 'NO_LARGE_FLOW') return 'Нет крупных переводов';
 
   return 'Не определено';
-}
+};
 
-function translateStrength(value) {
+const translateStrength = (value) => {
   if (value === 'very_strong') return 'очень сильный';
   if (value === 'strong') return 'сильный';
   if (value === 'moderate') return 'умеренный';
   if (value === 'weak') return 'слабый';
+  if (value === 'none') return 'нет сигнала';
 
   return 'нет оценки';
-}
+};
 
-function translateProfile(value) {
+const translateProfile = (value) => {
   if (value === 'clean_supply_drain') return 'Чистый вывод с бирж';
+  if (value === 'strong_signal_high_risk') return 'Сильная аномалия с высоким риском';
   if (value === 'speculative_recovery_candidate') return 'Спекулятивное восстановление';
   if (value === 'mixed_flow') return 'Смешанный сигнал';
   if (value === 'unconfirmed_flow') return 'Без подтверждения';
   if (value === 'sell_pressure_watch') return 'Давление продажи';
   if (value === 'weak_signal') return 'Слабый сигнал';
+  if (value === 'watchlist_candidate') return 'Кандидат в наблюдение';
 
   return 'Профиль не определен';
-}
+};
 
-function translateRecovery(value) {
+const translateRecovery = (value) => {
   if (value === 'extreme') return 'экстремально далеко от ATH';
   if (value === 'high') return 'сильно ниже ATH';
   if (value === 'medium') return 'умеренно ниже ATH';
   if (value === 'low') return 'недалеко от ATH';
+  if (value === 'none') return 'без recovery-дистанции';
 
   return 'без оценки';
-}
+};
 
-function translateRiskFlag(value) {
+const translateRiskFlag = (value) => {
   if (value === 'large_layer_conflict') return 'крупные переводы спорят с общим потоком';
   if (value === 'no_large_flow_confirmation') return 'нет подтверждения крупными переводами';
   if (value === 'weak_flow') return 'слабый поток';
@@ -121,19 +125,25 @@ function translateRiskFlag(value) {
   if (value === 'extreme_recovery_distance') return 'экстремальная дистанция до ATH';
   if (value === 'low_usd_flow') return 'малый объем в USD';
   if (value === 'zero_large_netflow') return 'нулевой крупный netflow';
+  if (value === 'high_concentration_risk') return 'высокая концентрация на одном участнике или адресе';
+  if (value === 'medium_concentration_risk') return 'средняя концентрация на одном участнике или адресе';
 
   return String(value || 'риск не определен').replaceAll('_', ' ');
-}
+};
 
-function getProfileExplanation({
+const getProfileExplanation = ({
   token,
   analysisProfile
-}) {
+}) => {
   const symbol = token?.symbol || 'Токен';
   const profile = analysisProfile?.profileLabel;
 
   if (profile === 'clean_supply_drain') {
     return `${symbol}: токены выходят с бирж, и крупные переводы подтверждают это направление. Это наиболее чистый тип flow-сигнала.`;
+  }
+
+  if (profile === 'strong_signal_high_risk') {
+    return `${symbol}: flow-сигнал сильный, но риск высокий. Такой токен лучше читать как аномалию: есть мощный вывод с бирж, но нужно проверить концентрацию, адреса и источник движения.`;
   }
 
   if (profile === 'speculative_recovery_candidate') {
@@ -153,26 +163,24 @@ function getProfileExplanation({
   }
 
   return `${symbol}: профиль сигнала пока недостаточно определен.`;
-}
+};
 
-function MetricCard({
+const MetricCard = ({
   title,
   value,
   subtitle,
   valueClassName = 'text-white'
-}) {
-  return (
-    <Card title={title} subtitle={subtitle}>
-      <p className={['text-3xl font-black', valueClassName].join(' ')}>
-        {value}
-      </p>
-    </Card>
-  );
-}
+}) => (
+  <Card title={title} subtitle={subtitle}>
+    <p className={['text-3xl font-black', valueClassName].join(' ')}>
+      {value}
+    </p>
+  </Card>
+);
 
-function RiskFlags({
+const RiskFlags = ({
   flags = []
-}) {
+}) => {
   if (!flags.length) {
     return (
       <p className="mt-3 text-sm font-semibold text-emerald-300">
@@ -193,14 +201,58 @@ function RiskFlags({
       ))}
     </div>
   );
-}
+};
 
-function SummarySection({
+const ScoreCard = ({
+  title,
+  value,
+  subtitle,
+  valueClassName = 'text-white'
+}) => (
+  <Card title={title} subtitle={subtitle}>
+    <p className={['text-3xl font-black', valueClassName].join(' ')}>
+      {value ?? '—'}
+    </p>
+  </Card>
+);
+
+const ScoreSection = ({
+  scores
+}) => {
+  if (!scores) return null;
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-3">
+      <ScoreCard
+        title="Качество сигнала"
+        subtitle="Сила flow-подтверждения"
+        value={scores.signalQuality}
+        valueClassName="text-cyan-300"
+      />
+
+      <ScoreCard
+        title="Риск"
+        subtitle="Концентрация, просадка, тонкость данных"
+        value={scores.riskScore}
+        valueClassName={toNumber(scores.riskScore) >= 60 ? 'text-red-300' : toNumber(scores.riskScore) >= 35 ? 'text-amber-300' : 'text-emerald-300'}
+      />
+
+      <ScoreCard
+        title="Аномальность"
+        subtitle="Сила сигнала + риск-контекст"
+        value={scores.anomalyScore}
+        valueClassName="text-fuchsia-300"
+      />
+    </div>
+  );
+};
+
+const SummarySection = ({
   profile
-}) {
-  const summary = profile.cexFlows?.summary || {};
+}) => {
+  const summary = profile.summary || {};
   const analysisProfile = profile.analysisProfile;
-  const token = profile.token || profile.leaderboardItem?.token || {
+  const token = profile.token || {
     symbol: profile.symbol
   };
 
@@ -251,11 +303,11 @@ function SummarySection({
       </div>
     </div>
   );
-}
+};
 
-function PriceSection({
+const PriceSection = ({
   priceContext
-}) {
+}) => {
   if (!priceContext) {
     return (
       <Card
@@ -298,14 +350,14 @@ function PriceSection({
       />
     </div>
   );
-}
+};
 
-function DailyFlowTable({
+const DailyFlowTable = ({
   items = []
-}) {
-  const sortedItems = useMemo(() => {
-    return [...items].sort((a, b) => String(b.date).localeCompare(String(a.date)));
-  }, [items]);
+}) => {
+  const sortedItems = useMemo(() => (
+    [...items].sort((a, b) => String(b.date).localeCompare(String(a.date)))
+  ), [items]);
 
   return (
     <Card
@@ -363,16 +415,16 @@ function DailyFlowTable({
       )}
     </Card>
   );
-}
+};
 
-export default function TokenDetailPage() {
+const TokenDetailPage = () => {
   const { symbol } = useParams();
 
   const [selectedRange, setSelectedRange] = useState('1m');
   const [profile, setProfile] = useState(null);
   const [status, setStatus] = useState('loading');
 
-  async function loadTokenProfile() {
+  const loadTokenProfile = async () => {
     setStatus('loading');
 
     try {
@@ -386,7 +438,7 @@ export default function TokenDetailPage() {
     } catch (error) {
       setStatus('error');
     }
-  }
+  };
 
   useEffect(() => {
     loadTokenProfile();
@@ -400,12 +452,12 @@ export default function TokenDetailPage() {
     return <ErrorState message={`Не удалось загрузить профиль ${String(symbol || '').toUpperCase()}.`} />;
   }
 
-  const token = profile?.token || profile?.leaderboardItem?.token || {
+  const token = profile?.token || {
     symbol: String(symbol || '').toUpperCase()
   };
 
-  const summary = profile?.cexFlows?.summary || {};
-  const range = profile?.cexFlows?.range || {};
+  const summary = profile?.summary || {};
+  const range = profile?.range || {};
 
   return (
     <div className="space-y-8">
@@ -450,7 +502,7 @@ export default function TokenDetailPage() {
 
         <Card title="Окно активности" subtitle={range.activeFlowWindow?.label || '—'}>
           <p className="text-2xl font-black text-white">
-            {range.loadedRows ?? profile?.cexFlows?.items?.length ?? 0}
+            {range.loadedRows ?? profile?.dailyFlows?.length ?? 0}
           </p>
 
           <p className="mt-2 text-sm text-slate-500">
@@ -458,7 +510,7 @@ export default function TokenDetailPage() {
           </p>
         </Card>
 
-        <Card title="Крупные переводы" subtitle={translateLargeFlow(profile?.leaderboardItem?.largeFlowHint)}>
+        <Card title="Крупные переводы" subtitle={translateLargeFlow(summary.largeFlowHint)}>
           <p className="text-2xl font-black text-white">
             {formatCompactUsd(summary.largeNetflowUsd)}
           </p>
@@ -470,7 +522,7 @@ export default function TokenDetailPage() {
 
         <Card title="Сила сигнала" subtitle="По backend-профилю">
           <p className="text-2xl font-black text-cyan-300">
-            {translateStrength(profile?.leaderboardItem?.strength)}
+            {translateStrength(summary.strength)}
           </p>
 
           <p className="mt-2 text-sm text-slate-500">
@@ -481,11 +533,20 @@ export default function TokenDetailPage() {
 
       <SummarySection profile={profile} />
 
-      <TokenFlowDiagnostics diagnostics={profile.flowDiagnostics} />
+      <ScoreSection scores={profile.scores} />
+
+      <TokenFlowDiagnostics
+        diagnostics={{
+          summary: profile.summary,
+          diagnostics: profile.diagnostics
+        }}
+      />
 
       <PriceSection priceContext={profile.priceContext} />
 
-      <DailyFlowTable items={profile.cexFlows?.items || []} />
+      <DailyFlowTable items={profile.dailyFlows || []} />
     </div>
   );
-}
+};
+
+export default TokenDetailPage;
